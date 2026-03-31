@@ -2,3 +2,5 @@ open -a simulator
 flutter run
 //r to refresh
 firebase emulators:start
+
+//
