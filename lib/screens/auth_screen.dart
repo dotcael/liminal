@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -102,11 +103,15 @@ class _AuthScreenState extends State<AuthScreen> {
 
       // Friendly messages
       if (e.code == 'invalid-email') userMessage = "Invalid email format";
-      if (e.code == 'email-already-in-use') userMessage = "This email is already registered";
-      if (e.code == 'weak-password') userMessage = "Password too weak (min 6 characters)";
-      if (e.code == 'user-not-found') userMessage = "No account with this email";
+      if (e.code == 'email-already-in-use')
+        userMessage = "This email is already registered";
+      if (e.code == 'weak-password')
+        userMessage = "Password too weak (min 6 characters)";
+      if (e.code == 'user-not-found')
+        userMessage = "No account with this email";
       if (e.code == 'wrong-password') userMessage = "Incorrect password";
-      if (e.code == 'too-many-requests') userMessage = "Too many attempts – wait a moment";
+      if (e.code == 'too-many-requests')
+        userMessage = "Too many attempts – wait a moment";
 
       Fluttertoast.showToast(
         msg: "$userMessage ($code)",
@@ -135,9 +140,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isLoginMode ? 'Login' : 'Create Account'),
-      ),
+      appBar: AppBar(title: Text(_isLoginMode ? 'Login' : 'Create Account')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -175,29 +178,41 @@ class _AuthScreenState extends State<AuthScreen> {
                     controller: _nameController,
                     decoration: const InputDecoration(labelText: 'Full name'),
                     textCapitalization: TextCapitalization.words,
-                    validator: (v) => v?.trim().isEmpty ?? true ? 'Name required' : null,
+                    validator: (v) =>
+                        v?.trim().isEmpty ?? true ? 'Name required' : null,
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: _role,
                     decoration: const InputDecoration(labelText: 'Role'),
                     items: const [
-                      DropdownMenuItem(value: 'student', child: Text('Student')),
-                      DropdownMenuItem(value: 'rep', child: Text('Academic Representative')),
+                      DropdownMenuItem(
+                        value: 'student',
+                        child: Text('Student'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'rep',
+                        child: Text('Academic Representative'),
+                      ),
                     ],
                     onChanged: (v) => setState(() => _role = v!),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _classController,
-                    decoration: const InputDecoration(labelText: 'Class / Year'),
-                    validator: (v) => v?.trim().isEmpty ?? true ? 'Class required' : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Class / Year',
+                    ),
+                    validator: (v) =>
+                        v?.trim().isEmpty ?? true ? 'Class required' : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _deptController,
                     decoration: const InputDecoration(labelText: 'Department'),
-                    validator: (v) => v?.trim().isEmpty ?? true ? 'Department required' : null,
+                    validator: (v) => v?.trim().isEmpty ?? true
+                        ? 'Department required'
+                        : null,
                   ),
                 ],
                 const SizedBox(height: 32),

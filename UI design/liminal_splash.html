@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body {
+    background: #12121f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  p.label {
+    text-align: center;
+    font-size: 12px;
+    color: #6b6b9a;
+    margin-bottom: 12px;
+  }
+  .phone {
+    width: 320px;
+    background: #1a1a2e;
+    border-radius: 36px;
+    border: 2px solid #2d2d4a;
+    overflow: hidden;
+  }
+  .status-bar {
+    background: #1a1a2e;
+    padding: 12px 24px 4px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #6b6b9a;
+  }
+  .splash-screen {
+    background: #1a1a2e;
+    height: 620px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0 32px;
+  }
+  .ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 0.5px solid #2d2d4a;
+  }
+  .glow-circle {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: #23234a;
+    border: 0.5px solid #3a3a6a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 32px;
+    position: relative;
+    z-index: 1;
+  }
+  .glow-circle-inner {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: #2a2a5a;
+    border: 0.5px solid #4a4aaa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .logo-letter {
+    font-size: 48px;
+    font-weight: 400;
+    color: #c8c8f4;
+    letter-spacing: 0.08em;
+  }
+  .app-name {
+    font-size: 24px;
+    font-weight: 400;
+    color: #e8e8f4;
+    letter-spacing: 0.12em;
+    text-align: center;
+    z-index: 1;
+  }
+  .tagline {
+    font-size: 12px;
+    color: #6b6b9a;
+    margin-top: 8px;
+    letter-spacing: 0.04em;
+    text-align: center;
+    z-index: 1;
+  }
+  .dedication {
+    position: absolute;
+    bottom: 48px;
+    text-align: center;
+    z-index: 1;
+  }
+  .dedication-line {
+    width: 40px;
+    height: 0.5px;
+    background: #3a3a6a;
+    margin: 0 auto 10px;
+  }
+  .dedication-text {
+    font-size: 11px;
+    color: #4a4a8a;
+    letter-spacing: 0.08em;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+  <p class="label">Splash screen — shows for 2-3 seconds on launch</p>
+  <div class="phone">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span>● ● ●</span>
+    </div>
+    <div class="splash-screen">
+
+      <div class="ring" style="width: 300px; height: 300px; top: 80px; left: 10px;"></div>
+      <div class="ring" style="width: 240px; height: 240px; top: 110px; left: 40px;"></div>
+
+      <div class="glow-circle">
+        <div class="glow-circle-inner">
+          <span class="logo-letter">L</span>
+        </div>
+      </div>
+
+      <div class="app-name">liminal</div>
+      <div class="tagline">stay on track. stay informed.</div>
+
+      <div class="dedication">
+        <div class="dedication-line"></div>
+        <div class="dedication-text">for KouZoya</div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

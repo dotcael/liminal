@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
 import 'screens/auth_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,7 +50,7 @@ class LiminalApp extends StatelessWidget {
         ),
       ),
 
-      home: const AuthScreen(),
+      home: const SplashScreen(),
     );
   }
 }

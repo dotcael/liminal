@@ -1,1 +1,44 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"student-task-management-system","appId":"1:715032648373:android:1d4a7972f86da77210fcfc","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"student-task-management-system","appId":"1:715032648373:ios:07940b2d79e9af1910fcfc","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"student-task-management-system","appId":"1:715032648373:ios:07940b2d79e9af1910fcfc","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"student-task-management-system","configurations":{"android":"1:715032648373:android:1d4a7972f86da77210fcfc","ios":"1:715032648373:ios:07940b2d79e9af1910fcfc","macos":"1:715032648373:ios:07940b2d79e9af1910fcfc","web":"1:715032648373:web:3eb6e1fbc20326b710fcfc","windows":"1:715032648373:web:8359111d9a5952b310fcfc"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "student-task-management-system",
+          "appId": "1:715032648373:android:1d4a7972f86da77210fcfc",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "student-task-management-system",
+          "appId": "1:715032648373:ios:07940b2d79e9af1910fcfc",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "student-task-management-system",
+          "appId": "1:715032648373:ios:07940b2d79e9af1910fcfc",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "student-task-management-system",
+          "configurations": {
+            "android": "1:715032648373:android:1d4a7972f86da77210fcfc",
+            "ios": "1:715032648373:ios:07940b2d79e9af1910fcfc",
+            "macos": "1:715032648373:ios:07940b2d79e9af1910fcfc",
+            "web": "1:715032648373:web:3eb6e1fbc20326b710fcfc",
+            "windows": "1:715032648373:web:8359111d9a5952b310fcfc"
+          }
+        }
+      }
+    }
+  },
+  "emulators": {
+    "singleProjectMode": true
+  }
+}
