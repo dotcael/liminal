@@ -12,6 +12,9 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
+
+//dont piss me off the 3 hours is a placeholder cuz we're actively workng on it. if not 
+//it will show me the auth screnafter 3 seconds . 
     Future.delayed(const Duration(hours: 3), () {
       Navigator.pushReplacement(
         context,
@@ -28,28 +31,56 @@ class _SplashScreenState extends State<SplashScreen> {
         alignment: Alignment.center,
         children: [
           // Ring 1
-          Center(
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF2d2d4a), width: 0.5),
-              ),
-            ),
-          ),
+       
+Positioned(
+  top: MediaQuery.of(context).size.height * 0.15,
+  left: 0,
+  right: 0,
+  child: Center(
+    child: Container(
+      width: 320,
+      height: 320,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF2d2d4a), width: 0.5),
+      ),
+    ),
+  ),
+),
+// Ring 2
+Positioned(
+  top: MediaQuery.of(context).size.height * 0.20,
+  left: 0,
+  right: 0,
+  child: Center(
+    child: Container(
+      width: 250,
+      height: 347,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF2d2d4a), width: 0.5),
+      ),
+    ),
+  ),
+),
           // Ring 2
-          Center(
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF2d2d4a), width: 0.5),
-              ),
-            ),
-          ),
-          // Center content
+Positioned(
+  top: MediaQuery.of(context).size.height * 0.20,
+  left: 0,
+  right: 0,
+  child: Center(
+    child: Container(
+      width: 250,
+      height: 250,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF2d2d4a), width: 0.5),
+      ),
+    ),
+  ),
+),
+
+          //  CENTER CONTENT (
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -66,7 +97,6 @@ class _SplashScreenState extends State<SplashScreen> {
                       width: 0.5,
                     ),
                   ),
-                  // child is INSIDE the outer Container, same level as decoration
                   child: Center(
                     child: Container(
                       width: 120,
@@ -84,7 +114,7 @@ class _SplashScreenState extends State<SplashScreen> {
                           'L',
                           style: TextStyle(
                             fontSize: 48,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.w500,
                             color: const Color(0xFFc8c8f4),
                             letterSpacing: 4,
                           ),
@@ -93,24 +123,57 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ),
                 ),
+
                 // App name
                 const SizedBox(height: 32),
+
                 Text(
                   'liminal',
                   style: TextStyle(
                     fontSize: 24,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.w500,
                     color: const Color(0xFFe8e8f4),
-                    letterSpacing: 6,
+                    letterSpacing: 5,
                   ),
                 ),
+
                 const SizedBox(height: 8),
+
                 Text(
-                  'stay connected, stay informed',
+                  'stay on track, stay informed',
                   style: TextStyle(
                     fontSize: 12,
                     color: const Color(0xFF6b6b9a),
                     letterSpacing: 2,
+                  ),
+                ),
+
+              
+              ],
+            ),
+          ),
+
+          //  Footer moved OUTSIDE the Column into Stack
+          // This allows it to be positioned independently
+          Positioned(
+            bottom: 40, //  pins it to bottom of screen
+            left: 0,
+            right: 0,
+            child: Column(
+              children: [
+                Container(
+                  width: 30,
+                  height: 1,
+                  color: const Color(0xFF2d2d4a),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'For KouZoya 🌹',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w300,
+                    color: Color(0xFF4a4aaa),
                   ),
                 ),
               ],
