@@ -1,0 +1,20 @@
+---
+description: How to explain Dart/Flutter code when the user asks about a block (learning-first project).
+alwaysApply: true
+---
+
+# Code block explanations (Liminal)
+
+When the user asks to explain a **block** of code (or a symbol they point at), structure the answer as follows:
+
+1. **What it does** — Behavior and flow in plain language (inputs, outputs, side effects).
+2. **Why it’s there** — Its role in the screen or app (validation, UI, Firebase, navigation, etc.).
+3. **What kind of thing it is** — Be explicit:
+   - **Function** (top-level) vs **method** (on a class)
+   - **Field / variable**: instance vs `static`, **private** if the name starts with `_`
+   - **Getter**, **constructor**, **`build` method**, **widget** type
+   - **Imported API**: name the **package** and whether it’s a class, static property, or instance method
+
+If a block mixes several of these, label **each** relevant part.
+
+Keep explanations accessible for a first Flutter project; avoid unnecessary jargon unless defined briefly.
