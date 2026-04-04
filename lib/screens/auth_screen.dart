@@ -12,73 +12,151 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  final _formKey = GlobalKey<FormState>();
+  //declaring email controller variables which use text  editing controller to
+  //get/trigger the value of email and password from text field
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
-  final _classController = TextEditingController();
   final _deptController = TextEditingController();
+  final _classController = TextEditingController();
 
-  String _role = 'student';
+  //declaring a variable to store the role of the user which is
+  //by default student and also declaring a boolean variable to check if the user is login or not and another boolean variable to show loading indicator when the user is signing up or logging in
+  String _role = 'Student';
   bool _isLoginMode = true;
   bool _isLoading = false;
 
+  //declaring a firebase auth instance and a firestore instance to interact with the firebase database
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
 
+  //Constant system wide UI colors. Couldve used  ThemeData tho.
+  static const _bg = Color(0xFF1a1a2e);
+  static const _surface = Color(0xFF22223a);
+  static const _border = Color(0xFF2d2d4a);
+  static const _borderAccent = Color(0xFF3a3a6a);
+  static const _accent = Color(0xFF4a4aaa);
+  static const _accentLight = Color(0xFF7b7bcc);
+  static const _textPrimary = Color(0xFFe8e8f4);
+  static const _textSecondary = Color(0xFF6b6b9a);
+
   @override
+  //using the controllers when the widget is disposed to free up resources
   void dispose() {
+    //disposefo the data that the below controllers will hold
+    // Always dispose controllers to free memory when screen is removed
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
-    _classController.dispose();
     _deptController.dispose();
-    super.dispose();
+    _classController.dispose();
+    super
+        .dispose(); //  calling the super method to dispose the state of the widget
   }
 
-  Future<void> _handleSubmit() async {
-    // First check form validation
-    if (!_formKey.currentState!.validate()) {
-      Fluttertoast.showToast(
-        msg: "Please fix the highlighted fields",
-        backgroundColor: Colors.orange,
-        textColor: Colors.white,
-      );
-      return;
+  //Email validation for reps by (CHECKING) strictly using @ulk.ac.rw email
+
+  bool _isValidRepEmail(String email) {
+    return email.trim().endsWith('@ulk.ac.rw');
+  }
+
+  //local form validation to make sure no bs gets sent to the backend
+  bool _validateForm() {
+    //trimming the email to remove any leading or trailing spaces and shares thm inn the class
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showToast("Please  fill in all fields", isError: true);
+      return false;
+    }
+    if (!email.contains('@')) {
+      _showToast('Please enter a valid email address', isError: true);
+      return false;
+    }
+    if (password.length < 8) {
+      _showToast('Password must be at least 8 characters', isError: true);
+      return false;
     }
 
-    setState(() => _isLoading = true);
+    //Sign up validation
 
-    // Debug prints (visible in terminal / VS Code debug console)
-    print('=== AUTH ACTION STARTED ===');
-    print('Mode: ${_isLoginMode ? "LOGIN" : "SIGNUP"}');
-    print('Email: ${_emailController.text.trim()}');
+    if (!_isLoginMode) {
+      if (_nameController.text.trim().isEmpty) {
+        _showToast('Please enter your full name', isError: true);
+        return false;
+      }
+
+      if (_deptController.text.trim().isEmpty) {
+        _showToast('Please enter your department', isError: true);
+        return false;
+      }
+
+      if (_classController.text.trim().isEmpty) {
+        _showToast('Please enter your class', isError: true);
+        return false;
+      }
+      // "valid address" is disclosed privately
+      if (_role == 'rep' && !_isValidRepEmail(email)) {
+        _showToast('Enter a valid REP email address', isError: true);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Reusable toast
+  //ensures  consistrnecy amonng popup notis
+
+  // app assumes its  false unless called
+  void _showToast(String msg, {bool isError = false}) {
+    Fluttertoast.showToast(
+      msg: msg,
+      backgroundColor: isError ? const Color(0xFF8a3a3a) : _accent,
+      textColor: _textPrimary,
+      toastLength: Toast.LENGTH_LONG, //Flutter length librrary  defaults 3.5s
+    );
+  }
+
+  // Main Authentication logic for both login and signup
+
+  Future<void> _handleSubmit() async {
+    if (!_validateForm()) return; // If validation fails, exit early
+
+    setState(() => _isLoading = true); // Show loading indicator
 
     try {
       if (_isLoginMode) {
-        // === LOGIN ===
-        print('Trying to log in...');
-        await _auth.signInWithEmailAndPassword(
+        final credential = await _auth.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
-        print('Login SUCCESS');
-        Fluttertoast.showToast(
-          msg: "Login successful!",
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
+        final doc = await _firestore
+            .collection('users')
+            .doc(credential.user!.uid)
+            .get();
+
+        final userRole =
+            doc.data()?['role'] ??
+            'student'; // if role exists use other wise default to student
+
+        final userName = doc.data()?['name'] ?? 'there';
+        _showToast('Welcome back,$userName');
+
+        //navigate homeand pass user roll
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomeScreen(role: userRole)),
         );
-      } else {
-        // === SIGNUP ===
-        print('Trying to create account...');
+      }
+      //sign up logic
+      else {
         final credential = await _auth.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
-        print('Account created – UID: ${credential.user?.uid}');
-
-        print('Saving user profile to Firestore...');
+        //save user profile  to firestore
         await _firestore.collection('users').doc(credential.user!.uid).set({
           'name': _nameController.text.trim(),
           'email': _emailController.text.trim(),
@@ -87,156 +165,85 @@ class _AuthScreenState extends State<AuthScreen> {
           'department': _deptController.text.trim(),
           'createdAt': FieldValue.serverTimestamp(),
         });
-        print('Profile saved successfully');
+        _showToast('Account created sucessfully!');
 
-        Fluttertoast.showToast(
-          msg: "Account created successfully!",
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-        );
+        if (mounted) {
+          Navigator.pushReplacememt(
+            context,
+            MaterialPageRoute(
+              builder: (context) {
+                HomeScreen(role: _role);
+              },
+            ),
+          );
+        }
       }
-    } on FirebaseAuthException catch (e) {
-      print('FirebaseAuth ERROR: ${e.code} → ${e.message}');
-
-      String userMessage = e.message ?? "Authentication failed";
-      String code = e.code.toUpperCase();
-
-      // Friendly messages
-      if (e.code == 'invalid-email') userMessage = "Invalid email format";
-      if (e.code == 'email-already-in-use')
-        userMessage = "This email is already registered";
+    }
+    // Handling specific Firebase authentication errors
+    on FirebaseAuthException catch (e) {
+      String msg =
+          'An error orccured, please try again'; // default error message
+      if (e.code == 'invalid-email') msg = 'Invalid email format';
+      if (e.code == 'email-already-in-use') msg = 'Email already registered';
+      if (e.code == 'user-not-found') msg = 'No account with this email';
       if (e.code == 'weak-password')
-        userMessage = "Password too weak (min 6 characters)";
-      if (e.code == 'user-not-found')
-        userMessage = "No account with this email";
-      if (e.code == 'wrong-password') userMessage = "Incorrect password";
+        msg = '  Passwords should  be  at least 8 characters';
+      if (e.code == 'wrong-password') msg = 'Incorrect passeord, try again';
       if (e.code == 'too-many-requests')
-        userMessage = "Too many attempts – wait a moment";
+        msg = 'Too many attempts,please try again later';
 
-      Fluttertoast.showToast(
-        msg: "$userMessage ($code)",
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-        toastLength: Toast.LENGTH_LONG,
-      );
+      _showToast(msg, isError: true);
     } catch (e) {
-      print('Unexpected error: $e');
-      Fluttertoast.showToast(
-        msg: "Unexpected error: $e",
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-        toastLength: Toast.LENGTH_LONG,
-      );
+      _showToast('Unexpected error $e', isError: true);
+      // Navigate to home with the role they signed up with
     }
-
-    // Always stop loading (even if error)
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
-
-    print('=== AUTH ACTION FINISHED ===');
+    if (mounted) setState(() => _isLoading = false); // Hide loading indicator
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(_isLoginMode ? 'Login' : 'Create Account')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Email required';
-                    if (!v.contains('@')) return 'Invalid email';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
-                  textInputAction: TextInputAction.done,
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Password required';
-                    if (v.length < 6) return 'At least 6 characters';
-                    return null;
-                  },
-                ),
-                if (!_isLoginMode) ...[
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Full name'),
-                    textCapitalization: TextCapitalization.words,
-                    validator: (v) =>
-                        v?.trim().isEmpty ?? true ? 'Name required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: _role,
-                    decoration: const InputDecoration(labelText: 'Role'),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'student',
-                        child: Text('Student'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'rep',
-                        child: Text('Academic Representative'),
-                      ),
-                    ],
-                    onChanged: (v) => setState(() => _role = v!),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _classController,
-                    decoration: const InputDecoration(
-                      labelText: 'Class / Year',
-                    ),
-                    validator: (v) =>
-                        v?.trim().isEmpty ?? true ? 'Class required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _deptController,
-                    decoration: const InputDecoration(labelText: 'Department'),
-                    validator: (v) => v?.trim().isEmpty ?? true
-                        ? 'Department required'
-                        : null,
-                  ),
-                ],
-                const SizedBox(height: 32),
-                if (_isLoading)
-                  const Center(child: CircularProgressIndicator())
-                else
-                  ElevatedButton(
-                    onPressed: _handleSubmit,
-                    child: Text(_isLoginMode ? 'LOGIN' : 'CREATE ACCOUNT'),
-                  ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => setState(() => _isLoginMode = !_isLoginMode),
-                  child: Text(
-                    _isLoginMode
-                        ? "Don't have an account? Sign up"
-                        : 'Already have an account? Login',
-                  ),
-                ),
-              ],
+  // ─── Reusable input field ──────────────────────────────────────────────────
+  // Keeps all fields visually consistent without repeating styling
+  Widget _buildField({
+    required String label,
+    required TextEditingController controller,
+    //password dotting if ticked (true)
+    bool obscure = false,
+
+    TextInputType keyboard = TextInputType.text,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: _textSecondary,
+            letterSpacing: 0.5,
+          ),
+        ),
+
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _borderAccent, width: 0.5),
+          ),
+          child: TextField(
+            controller: controller,
+            obscureText: obscure,
+            keyboardType: keyboard,
+            style: const TextStyle(fontSize: 13, color: _textPrimary),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 11,
+              ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

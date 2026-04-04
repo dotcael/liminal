@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:liminal/screens/music.dart';
 
 import 'firebase_options.dart';
 import 'screens/auth_screen.dart';
@@ -50,7 +51,8 @@ class LiminalApp extends StatelessWidget {
         ),
       ),
 
-      home: const SplashScreen(),
+//changes which screen to show first
+      home: const AuthScreen(),
     );
   }
 }

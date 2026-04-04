@@ -15,7 +15,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
 //dont piss me off the 3 hours is a placeholder cuz we're actively workng on it. if not 
 //it will show me the auth screnafter 3 seconds . 
-    Future.delayed(const Duration(hours: 3), () {
+    Future.delayed(const Duration(seconds: 3), () {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const AuthScreen()),

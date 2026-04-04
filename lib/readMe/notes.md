@@ -11,3 +11,7 @@ hly shit tscop ecreep is beating my ass. what if users can also preenroll for co
 //what differenciates the student from the rep  like what stops a student from making a rep accont  
 
 //generate one time code or use ulk email like rw@ulk.com y
+
+//for cha tgpt : wym Could have used ThemeData with a proper theme, but constants are simpler for a single screen.  wym  fro a simple screen and n theme  data. this is  for  anapp btw.
+
+ FCM implementation  especially for ios whihc  require explicit  permission fromthe user. later iteration
