@@ -11,3 +11,5 @@ git push
 
 //rolls back to the previous one(HEAD~1) commiut
 git checkout HEAD~1 {directory ie  lib/screens/splash_screen.dart}
+
+git checkout HEAD~1 {/lib/screens/auth_screen.dart}

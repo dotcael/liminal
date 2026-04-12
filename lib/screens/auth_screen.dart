@@ -176,21 +176,58 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     }
     // Handling specific Firebase authentication errors
-    on FirebaseAuthException catch (e) {
-      // default error message
-      String msg = "Authentication failed";
-      if (e.code == 'invalid-email') msg = "Invalid email format";
-      if (e.code == 'email-already-in-use') msg = "Email already registered";
-      if (e.code == 'weak-password') msg = "Password too weak (min 6 chars)";
-      if (e.code == 'user-not-found') msg = "No account with this email";
-      if (e.code == 'wrong-password') msg = "Incorrect password";
-      if (e.code == 'too-many-requests')
-        msg = "Too many attempts — wait a moment";
+     on FirebaseAuthException catch (e) {
+      String msg;
+
+      if (_isLoginMode) {
+        switch (e.code) {
+          case 'invalid-email':
+            msg = "Invalid email format";
+            break;
+          case 'user-not-found':
+            msg = "No account found with this email";
+            break;
+          case 'wrong-password':
+          case 'invalid-credential':
+            msg = "Incorrect email or password";
+            break;
+          case 'user-disabled':
+            msg = "This account has been disabled";
+            break;
+          case 'too-many-requests':
+            msg = "Too many attempts — wait a moment";
+            break;
+          case 'network-request-failed':
+            msg = "Network error — check your internet connection";
+            break;
+          default:
+            msg = "Login failed. Please try again";
+        }
+      } else {
+        switch (e.code) {
+          case 'invalid-email':
+            msg = "Invalid email format";
+            break;
+          case 'email-already-in-use':
+            msg = "Email already registered";
+            break;
+          case 'weak-password':
+            msg = "Password too weak (min 6 chars)";
+            break;
+          case 'operation-not-allowed':
+            msg = "Signup is currently unavailable";
+            break;
+          case 'network-request-failed':
+            msg = "Network error — check your internet connection";
+            break;
+          default:
+            msg = "Account creation failed. Please try again";
+        }
+      }
 
       _showToast(msg, isError: true);
     } catch (e) {
-      //general default error message
-      _showToast("Unexpected error: $e", isError: true);
+      _showToast("Something went wrong. Please try again", isError: true);
     }
     if (mounted) setState(() => _isLoading = false); // Hide loading indicator
   }
@@ -228,7 +265,7 @@ class _AuthScreenState extends State<AuthScreen> {
             obscureText: obscure,
             keyboardType: keyboard,
             style: const TextStyle(fontSize: 13, color: _textPrimary),
-            decoration: InputDecoration(
+         decoration: InputDecoration(
   border: InputBorder.none,
   filled: true,
   fillColor: _surface,
