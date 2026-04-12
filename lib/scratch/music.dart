@@ -1,3 +1,5 @@
+//copy code [code im copying from]
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -5,35 +7,28 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
-  //this is the constructor for the auth screen
   const AuthScreen({super.key});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-//this is the state for the auth screen
-//declaring email controller variables which use text editing controller to
 class _AuthScreenState extends State<AuthScreen> {
-  //get/trigger the value of email and password from text field
-
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _classController = TextEditingController();
   final _deptController = TextEditingController();
 
-  //declaring a variable to store the role of the user which is
-  //by default student
   String _role = 'student';
   bool _isLoginMode = true;
   bool _isLoading = false;
 
-  //declaring a firebase auth instance and a firestore instance to interact with the firebase database
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
 
-  //Constant system wide UI colors. Couldve used ThemeData tho.
+  // ─── Design system constants ───────────────────────────────────────────────
+  // These match the agreed dark navy + indigo color scheme across all screens
   static const _bg = Color(0xFF1a1a2e);
   static const _surface = Color(0xFF22223a);
   static const _border = Color(0xFF2d2d4a);
@@ -44,26 +39,25 @@ class _AuthScreenState extends State<AuthScreen> {
   static const _textSecondary = Color(0xFF6b6b9a);
 
   @override
-  //using the controllers when the widget is disposed to free up resources
   void dispose() {
-    //dispose of the data that the below controllers will hold
-    // Always dispose controllers to free memory when screen is removed
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
     _classController.dispose();
     _deptController.dispose();
-    super.dispose(); // calling the super method to dispose the state of the widget
+    super.dispose();
   }
 
-  //Email validation for reps by (CHECKING) strictly using @ulk.ac.rw email
+  // ─── SECURITY: ULK email validation for rep accounts ──────────────────────
+  // Reps must use an @ulk.ac.rw email to prevent students
+  // from registering as academic representatives
   bool _isValidRepEmail(String email) {
     return email.trim().endsWith('@ulk.ac.rw');
   }
 
-  //local form validation to make sure no bs gets sent to the backend
+  // ─── Form validation ───────────────────────────────────────────────────────
+  // Catches empty fields locally before making any Firebase calls
   bool _validateForm() {
-    //trimming the email to remove any leading or trailing spaces and shares them in the class
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -82,7 +76,7 @@ class _AuthScreenState extends State<AuthScreen> {
       return false;
     }
 
-    //Sign up validation
+    // Signup-only validation
     if (!_isLoginMode) {
       if (_nameController.text.trim().isEmpty) {
         _showToast("Please enter your full name", isError: true);
@@ -94,7 +88,7 @@ class _AuthScreenState extends State<AuthScreen> {
         return false;
       }
 
-      // "valid address" is disclosed privately
+      // SECURITY: Rep accounts require ULK email
       if (_role == 'rep' && !_isValidRepEmail(email)) {
         _showToast("Rep accounts require a @ulk.ac.rw email", isError: true);
         return false;
@@ -104,39 +98,42 @@ class _AuthScreenState extends State<AuthScreen> {
     return true;
   }
 
-  // Reusable toast
-  //ensures consistency among popup notis
-
-  // app assumes its false unless called
+  // ─── Toast helper ──────────────────────────────────────────────────────────
+  // Reusable toast so we don't repeat styling everywhere
   void _showToast(String msg, {bool isError = false}) {
     Fluttertoast.showToast(
       msg: msg,
       backgroundColor: isError ? const Color(0xFF8a3a3a) : _accent,
       textColor: _textPrimary,
-      toastLength: Toast.LENGTH_LONG, //Flutter length library defaults 3.5s
+      toastLength: Toast.LENGTH_LONG,
     );
   }
 
-  // Main Authentication logic for both login and signup
+  // ─── Main auth handler ─────────────────────────────────────────────────────
   Future<void> _handleSubmit() async {
-    if (!_validateForm()) return; // If validation fails, exit early
+    // Run validation first — stop here if anything is wrong
+    if (!_validateForm()) return;
 
-    setState(() => _isLoading = true); // Show loading indicator
+    setState(() => _isLoading = true);
 
     try {
       if (_isLoginMode) {
+        // ── LOGIN ──────────────────────────────────────────────────────────
         final credential = await _auth.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
+        // ROLE FIX: After login, fetch the user's actual role from Firestore
+        // We don't trust the role selector on screen — we read what was
+        // saved during signup. This role will be passed to HomeScreen
+        // so it knows what features to show (student vs rep)
         final doc = await _firestore
             .collection('users')
             .doc(credential.user!.uid)
-            .get(); //get the user role from the firestore database
+            .get();
 
-        final userRole = doc.data()?['role'] ?? 'student'; // if role exists use otherwise default to student
-        final userName = doc.data()?['name'] ?? 'there'; // fetch name from Firestore
+        final userRole = doc.data()?['role'] ?? 'student';
 
         _showToast("Welcome back.");
 
@@ -144,18 +141,18 @@ class _AuthScreenState extends State<AuthScreen> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => HomeScreen(name: userName, role: userRole)),
+            MaterialPageRoute(builder: (context) => HomeScreen(role: userRole)),
           );
         }
-      }
-      //sign up logic
-      else {
+      } else {
+        // ── SIGNUP ─────────────────────────────────────────────────────────
         final credential = await _auth.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
-        //save user profile to firestore
+        // Save user profile to Firestore
+        // class is optional for reps — stored as empty string if not provided
         await _firestore.collection('users').doc(credential.user!.uid).set({
           'name': _nameController.text.trim(),
           'email': _emailController.text.trim(),
@@ -167,17 +164,16 @@ class _AuthScreenState extends State<AuthScreen> {
 
         _showToast("Account created.");
 
+     
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => HomeScreen(name: _nameController.text.trim(), role: _role)),
+            MaterialPageRoute(builder: (context) => HomeScreen(role: _role)),
           );
         }
       }
-    }
-    // Handling specific Firebase authentication errors
-    on FirebaseAuthException catch (e) {
-      // default error message
+    } on FirebaseAuthException catch (e) {
+      // Firebase-specific errors with friendly messages
       String msg = "Authentication failed";
       if (e.code == 'invalid-email') msg = "Invalid email format";
       if (e.code == 'email-already-in-use') msg = "Email already registered";
@@ -186,27 +182,25 @@ class _AuthScreenState extends State<AuthScreen> {
       if (e.code == 'wrong-password') msg = "Incorrect password";
       if (e.code == 'too-many-requests')
         msg = "Too many attempts — wait a moment";
-
+        
       _showToast(msg, isError: true);
     } catch (e) {
-      //general default error message
       _showToast("Unexpected error: $e", isError: true);
     }
-    if (mounted) setState(() => _isLoading = false); // Hide loading indicator
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
-  // Reusable input field
+  // ─── Reusable input field ──────────────────────────────────────────────────
   // Keeps all fields visually consistent without repeating styling
   Widget _buildField({
     required String label,
     required TextEditingController controller,
-
-    //password dotting if ticked (true)
     bool obscure = false,
     TextInputType keyboard = TextInputType.text,
   }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -228,15 +222,13 @@ class _AuthScreenState extends State<AuthScreen> {
             obscureText: obscure,
             keyboardType: keyboard,
             style: const TextStyle(fontSize: 13, color: _textPrimary),
-            decoration: InputDecoration(
-  border: InputBorder.none,
-  filled: true,
-  fillColor: _surface,
-  contentPadding: const EdgeInsets.symmetric(
-    horizontal: 14,
-    vertical: 11,
-  ),
-),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 11,
+              ),
+            ),
           ),
         ),
       ],
@@ -253,6 +245,7 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Header ────────────────────────────────────────────────────
               const Text(
                 'Liminal',
                 style: TextStyle(
@@ -261,13 +254,16 @@ class _AuthScreenState extends State<AuthScreen> {
                   color: _textPrimary,
                 ),
               ),
+
               const SizedBox(height: 6),
               const Text(
                 'Your academic task manager',
                 style: TextStyle(fontSize: 13, color: _textSecondary),
               ),
+
               const SizedBox(height: 32),
 
+              // ── Always shown fields ───────────────────────────────────────
               _buildField(
                 label: 'Email',
                 controller: _emailController,
@@ -280,11 +276,13 @@ class _AuthScreenState extends State<AuthScreen> {
                 obscure: true,
               ),
 
-              //sign up mode
+              // ── Signup-only fields ────────────────────────────────────────
+              // These only appear when the user is in signup mode
               if (!_isLoginMode) ...[
                 const SizedBox(height: 14),
                 _buildField(label: 'Full name', controller: _nameController),
                 const SizedBox(height: 14),
+
                 // Class is optional for reps — label reflects this
                 _buildField(
                   label: _role == 'rep'
@@ -298,7 +296,10 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 24),
 
-              //role selector
+              // ── Role selector ─────────────────────────────────────────────
+              // Shown on both login and signup
+              // On login it's visual only — real role is fetched from Firestore
+              // On signup it determines what role gets saved
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -373,8 +374,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 24),
 
-              //submit button
-              //if it is loading and gets tapped do nothing else handle submit
+              // ── Submit button ─────────────────────────────────────────────
               GestureDetector(
                 onTap: _isLoading ? null : _handleSubmit,
                 child: Container(
@@ -384,8 +384,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     color: _accent,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: _isLoading
-                      ? const Center(
+                  child: _isLoading ? const Center(
                           child: SizedBox(
                             width: 18,
                             height: 18,
@@ -409,7 +408,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 16),
 
-              //toggle login or signup
+              // ── Toggle login / signup ─────────────────────────────────────
               Center(
                 child: GestureDetector(
                   onTap: () => setState(() => _isLoginMode = !_isLoginMode),

@@ -198,17 +198,7 @@ class _AuthScreenState extends State<AuthScreen> {
     TextInputType keyboard = TextInputType.text,
   }) {
     return Column(
-      // crossAxisAlignment: CrossAxisAlignment.start,
-      //
-      // What it does:
-      //   This property ensures that all widgets in the Column
-      //   are left-aligned (start of the horizontal axis) instead of being centered.
-      // Why it’s there:
-      //   It keeps all label/text fields and input fields neatly left-aligned,
-      //   creating visual consistency for form layouts.
-      // What kind of thing it is:
-      //   Field/property: The `crossAxisAlignment` property belongs to the `Column` widget,
-      //   and its value here (`CrossAxisAlignment.start`) is a constant from Flutter’s material library.
+       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -292,9 +282,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
                 // Class is optional for reps — label reflects this
                 _buildField(
-                  label: _role == 'rep'
-                      ? 'Class / Year (optional for reps)'
-                      : 'Class / Year',
+                  label: _role == 'rep' ? 'Class / Year (optional for reps)'  : 'Class / Year',
                   controller: _classController,
                 ),
                 const SizedBox(height: 14),
