@@ -265,11 +265,11 @@ class _AuthScreenState extends State<AuthScreen> {
             obscureText: obscure,
             keyboardType: keyboard,
             style: const TextStyle(fontSize: 13, color: _textPrimary),
-         decoration: InputDecoration(
+         decoration: const InputDecoration(
   border: InputBorder.none,
   filled: true,
   fillColor: _surface,
-  contentPadding: const EdgeInsets.symmetric(
+  contentPadding: EdgeInsets.symmetric(
     horizontal: 14,
     vertical: 11,
   ),

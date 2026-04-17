@@ -109,13 +109,13 @@ Positioned(
                           width: 0.5,
                         ),
                       ),
-                      child: Center(
+                      child: const Center(
                         child: Text(
                           'L',
                           style: TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.w500,
-                            color: const Color(0xFFc8c8f4),
+                            color: Color(0xFFc8c8f4),
                             letterSpacing: 4,
                           ),
                         ),
@@ -127,23 +127,23 @@ Positioned(
                 // App name
                 const SizedBox(height: 32),
 
-                Text(
+                const Text(
                   'liminal',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w500,
-                    color: const Color(0xFFe8e8f4),
+                    color: Color(0xFFe8e8f4),
                     letterSpacing: 5,
                   ),
                 ),
 
                 const SizedBox(height: 8),
 
-                Text(
+                const Text(
                   'stay on track, stay informed',
                   style: TextStyle(
                     fontSize: 12,
-                    color: const Color(0xFF6b6b9a),
+                    color: Color(0xFF6b6b9a),
                     letterSpacing: 2,
                   ),
                 ),

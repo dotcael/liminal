@@ -13,3 +13,11 @@ git push
 git checkout HEAD~1 {directory ie  lib/screens/splash_screen.dart}
 
 git checkout HEAD~1 {/lib/screens/auth_screen.dart}
+
+to sync
+git clone https://github.com/dotcael/liminal.git
+cd liminal
+flutter pub get
+
+//run
+flutter run -d chrome
