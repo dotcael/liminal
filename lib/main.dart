@@ -51,8 +51,8 @@ class LiminalApp extends StatelessWidget {
 
       // app always opens at splash first
       // initialRoute: '/splash'
-     home: const HomeScreen(name: 'Test User', role: 'Admin'),
-      // home: const FeedScreen(),
+    //  home: const HomeScreen(name: 'Test User', role: 'Admin'),
+      home: const FeedScreen(),
     );
   }
 }

@@ -1,5 +1,4 @@
 // John 3:16-17
-
 import 'package:flutter/material.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -11,29 +10,29 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   // same color system as home_screen.dart
-  static const _bg          = Color(0xFF1a1a2e);
-  static const _surface     = Color(0xFF22223a);
-  static const _border      = Color(0xFF2d2d4a);
-  static const _accent      = Color(0xFF4a4aaa);
+  static const _bg = Color(0xFF1a1a2e);
+  static const _surface = Color(0xFF22223a);
+  static const _border = Color(0xFF2d2d4a);
+  static const _accent = Color(0xFF4a4aaa);
   static const _textPrimary = Color(0xFFe8e8f4);
-  static const _textMuted   = Color(0xFF6b6b9a);
-  static const _textDim     = Color(0xFF4a4a6a);
+  static const _textMuted = Color(0xFF6b6b9a);
+  static const _textDim = Color(0xFF4a4a6a);
 
   // category accent colors — left bar + timeline dot
-  static const _colorAcademic  = Color(0xFF5c5cd6);
-  static const _colorPersonal  = Color(0xFF4a9a60);
+  static const _colorAcademic = Color(0xFF5c5cd6);
+  static const _colorPersonal = Color(0xFF4a9a60);
   static const _colorFinancial = Color(0xFFc49040);
-  static const _colorUrgent    = Color(0xFFd85a30);
+  static const _colorUrgent = Color(0xFFd85a30);
 
   // badge bg / text pairs per category
-  static const _badgeBgAcademic   = Color(0xFF2a2a5a);
-  static const _badgeTxtAcademic  = Color(0xFF8888dd);
-  static const _badgeBgPersonal   = Color(0xFF1a3a28);
-  static const _badgeTxtPersonal  = Color(0xFF5abba0);
-  static const _badgeBgFinancial  = Color(0xFF3a2a10);
+  static const _badgeBgAcademic = Color(0xFF2a2a5a);
+  static const _badgeTxtAcademic = Color(0xFF8888dd);
+  static const _badgeBgPersonal = Color(0xFF1a3a28);
+  static const _badgeTxtPersonal = Color(0xFF5abba0);
+  static const _badgeBgFinancial = Color(0xFF3a2a10);
   static const _badgeTxtFinancial = Color(0xFFc49040);
-  static const _badgeBgUrgent     = Color(0xFF3a1a1a);
-  static const _badgeTxtUrgent    = Color(0xFFd87a5a);
+  static const _badgeBgUrgent = Color(0xFF3a1a1a);
+  static const _badgeTxtUrgent = Color(0xFFd87a5a);
 
   // currently selected filter chip — drives which items are visible
   _FeedFilter _activeFilter = _FeedFilter.all;
@@ -267,7 +266,6 @@ class _FeedScreenState extends State<FeedScreen> {
     final groupItems = _visibleItems
         .where((i) => i.dateGroup == group)
         .toList();
-
     return List.generate(groupItems.length, (index) {
       final item = groupItems[index];
       // whether to draw the vertical line below this dot —
@@ -281,7 +279,6 @@ class _FeedScreenState extends State<FeedScreen> {
   // one row: dot + vertical line on the left, card on the right
   Widget _buildTimelineRow(_FeedItem item, {required bool drawLine}) {
     final dotColor = _categoryAccentColor(item.category);
-
     return IntrinsicHeight(
       // IntrinsicHeight makes the Row children match the tallest child's height
       // needed so the vertical line stretches to fill the full card height
@@ -335,99 +332,99 @@ class _FeedScreenState extends State<FeedScreen> {
         ? const Color(0xFF231a1a)
         : _surface;
 
-    return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: cardBg,
-        // left border uses category color; other sides use the default border
-        border: Border(
-          top:    const BorderSide(color: _border, width: 0.5),
-          right:  const BorderSide(color: _border, width: 0.5),
-          bottom: const BorderSide(color: _border, width: 0.5),
-          left:   BorderSide(color: accentColor, width: 2.5),
-        ),
-        // only the right-side corners are rounded —
-        // flat on the left because the border connects to the timeline
-        borderRadius: const BorderRadius.only(
-          topRight:    Radius.circular(10),
-          bottomRight: Radius.circular(10),
-        ),
+    // ClipRRect fixes the mixed-border + borderRadius crash
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        topRight: Radius.circular(10),
+        bottomRight: Radius.circular(10),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // source line + timestamp
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                item.source,
-                style: const TextStyle(fontSize: 9, color: _textMuted),
-              ),
-              Text(
-                item.time,
-                style: const TextStyle(fontSize: 9, color: _textDim),
-              ),
-            ],
+      child: Container(
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: cardBg,
+          // left border uses category color; other sides use the default border
+          border: Border(
+            top: const BorderSide(color: _border, width: 0.5),
+            right: const BorderSide(color: _border, width: 0.5),
+            bottom: const BorderSide(color: _border, width: 0.5),
+            left: BorderSide(color: accentColor, width: 2.5),
           ),
-          const SizedBox(height: 4),
-          // title
-          Text(
-            item.title,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: _textPrimary,
-              height: 1.4,
-            ),
-          ),
-          // body text — only shown when non-empty
-          if (item.body.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              item.body,
-              style: const TextStyle(fontSize: 9, color: _textMuted, height: 1.5),
-            ),
-          ],
-          const SizedBox(height: 7),
-          // badge + due date row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildBadge(item.category),
-              Text(
-                item.due,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: item.dueIsHot ? _badgeTxtUrgent : _textDim,
-                ),
-              ),
-            ],
-          ),
-          // action buttons — only shown when the item has actions defined
-          if (item.actions.isNotEmpty) ...[
-            const SizedBox(height: 8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // source line + timestamp
             Row(
-              children: item.actions.map((label) {
-                final isPrimary = item.actions.indexOf(label) == 0;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: _buildActionButton(label, isPrimary: isPrimary),
-                );
-              }).toList(),
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  item.source,
+                  style: const TextStyle(fontSize: 9, color: _textMuted),
+                ),
+                Text(
+                  item.time,
+                  style: const TextStyle(fontSize: 9, color: _textDim),
+                ),
+              ],
             ),
+            const SizedBox(height: 4),
+            // title
+            Text(
+              item.title,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: _textPrimary,
+                height: 1.4,
+              ),
+            ),
+            // body text — only shown when non-empty
+            if (item.body.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                item.body,
+                style: const TextStyle(fontSize: 9, color: _textMuted, height: 1.5),
+              ),
+            ],
+            const SizedBox(height: 7),
+            // badge + due date row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildBadge(item.category),
+                Text(
+                  item.due,
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: item.dueIsHot ? _badgeTxtUrgent : _textDim,
+                  ),
+                ),
+              ],
+            ),
+            // action buttons — only shown when the item has actions defined
+            if (item.actions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: item.actions.map((label) {
+                  final isPrimary = item.actions.indexOf(label) == 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: _buildActionButton(label, isPrimary: isPrimary),
+                  );
+                }).toList(),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
   // small category badge pill
   Widget _buildBadge(_FeedCategory category) {
-    final bg   = _categoryBadgeBg(category);
+    final bg = _categoryBadgeBg(category);
     final text = _categoryBadgeText(category);
     final label = _categoryLabel(category);
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -495,9 +492,9 @@ class _FeedScreenState extends State<FeedScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem('Home',    isActive: false),
-          _buildNavItem('Feed',    isActive: true),
-          _buildNavItem('Tasks',   isActive: false),
+          _buildNavItem('Home', isActive: false),
+          _buildNavItem('Feed', isActive: true),
+          _buildNavItem('Tasks', isActive: false),
           _buildNavItem('Profile', isActive: false),
         ],
       ),
@@ -533,38 +530,36 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   // ── helpers: map category enum → colors / labels ─────────────────────────────
-
   Color _categoryAccentColor(_FeedCategory cat) => switch (cat) {
-    _FeedCategory.urgent    => _colorUrgent,
-    _FeedCategory.academic  => _colorAcademic,
-    _FeedCategory.personal  => _colorPersonal,
-    _FeedCategory.financial => _colorFinancial,
-  };
+        _FeedCategory.urgent => _colorUrgent,
+        _FeedCategory.academic => _colorAcademic,
+        _FeedCategory.personal => _colorPersonal,
+        _FeedCategory.financial => _colorFinancial,
+      };
 
   Color _categoryBadgeBg(_FeedCategory cat) => switch (cat) {
-    _FeedCategory.urgent    => _badgeBgUrgent,
-    _FeedCategory.academic  => _badgeBgAcademic,
-    _FeedCategory.personal  => _badgeBgPersonal,
-    _FeedCategory.financial => _badgeBgFinancial,
-  };
+        _FeedCategory.urgent => _badgeBgUrgent,
+        _FeedCategory.academic => _badgeBgAcademic,
+        _FeedCategory.personal => _badgeBgPersonal,
+        _FeedCategory.financial => _badgeBgFinancial,
+      };
 
   Color _categoryBadgeText(_FeedCategory cat) => switch (cat) {
-    _FeedCategory.urgent    => _badgeTxtUrgent,
-    _FeedCategory.academic  => _badgeTxtAcademic,
-    _FeedCategory.personal  => _badgeTxtPersonal,
-    _FeedCategory.financial => _badgeTxtFinancial,
-  };
+        _FeedCategory.urgent => _badgeTxtUrgent,
+        _FeedCategory.academic => _badgeTxtAcademic,
+        _FeedCategory.personal => _badgeTxtPersonal,
+        _FeedCategory.financial => _badgeTxtFinancial,
+      };
 
   String _categoryLabel(_FeedCategory cat) => switch (cat) {
-    _FeedCategory.urgent    => 'Urgent',
-    _FeedCategory.academic  => 'Academic',
-    _FeedCategory.personal  => 'Personal',
-    _FeedCategory.financial => 'Financial',
-  };
+        _FeedCategory.urgent => 'Urgent',
+        _FeedCategory.academic => 'Academic',
+        _FeedCategory.personal => 'Personal',
+        _FeedCategory.financial => 'Financial',
+      };
 }
 
 // ── enums ─────────────────────────────────────────────────────────────────────
-
 enum _FeedFilter {
   all,
   academic,
@@ -572,17 +567,16 @@ enum _FeedFilter {
   financial;
 
   String get label => switch (this) {
-    _FeedFilter.all       => 'All',
-    _FeedFilter.academic  => 'Academic',
-    _FeedFilter.personal  => 'Personal',
-    _FeedFilter.financial => 'Financial',
-  };
+        _FeedFilter.all => 'All',
+        _FeedFilter.academic => 'Academic',
+        _FeedFilter.personal => 'Personal',
+        _FeedFilter.financial => 'Financial',
+      };
 }
 
 enum _FeedCategory { urgent, academic, personal, financial }
 
 // ── data model ────────────────────────────────────────────────────────────────
-
 class _FeedItem {
   final _FeedCategory category;
   final String source;
