@@ -40,6 +40,7 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSectionLabel('Urgent'),
+
                     _buildTaskCard(
                       title: 'Data Structures Assignment 3',
                       meta: 'CS Year 3 · Academic',
@@ -47,6 +48,7 @@ class HomeScreen extends StatelessWidget {
                       urgency: _Urgency.urgent,
                     ),
                     _buildSectionLabel('Up next'),
+
                     _buildTaskCard(
                       title: 'SE lecture moved',
                       meta: '8am · Room B4',
@@ -59,8 +61,56 @@ class HomeScreen extends StatelessWidget {
                       dueBadge: 'Friday',
                       urgency: _Urgency.later,
                     ),
+                    _buildTaskCard(
+
+                      title: 'Cross Check IDCL Terms',
+                      meta: 'Personal ',
+                      dueBadge: 'Friday',
+                      urgency: _Urgency.later,
+                  
+                    ),
+                    _buildTaskCard(
+
+                      title: 'Cross Check IDCL Terms',
+                      meta: 'Personal ',
+                      dueBadge: 'Friday',
+                      urgency: _Urgency.later,
+                  
+                    ),
+                    _buildTaskCard(
+
+                      title: 'Cross Check IDCL Terms',
+                      meta: 'Personal ',
+                      dueBadge: 'Friday',
+                      urgency: _Urgency.soon,
+                  
+                    ),
+                    _buildTaskCard(
+
+                      title: 'Pay School fees',
+                      meta: 'Academic ',
+                      dueBadge: 'Friday',
+                      urgency: _Urgency.urgent,
+                  
+                    ),
+                    _buildTaskCard(
+
+                      title: 'Cross Check IDCL Terms',
+                      meta: 'Personal ',
+                      dueBadge: 'Friday',
+                      urgency: _Urgency.later,
+                  
+                    ),
+                      _buildTaskCard(
+
+                      title: 'Pay School fees',
+                      meta: 'Academic ',
+                      dueBadge: 'Friday',
+                      urgency: _Urgency.urgent,
+                  
+                      ),
                     const SizedBox(height: 12),
-                    _buildFab(),
+                   
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -70,6 +120,9 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
+      floatingActionButton: Padding( padding: const EdgeInsets.only(bottom:63),
+      child:_buildFab(),),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endDocked,
     );
   }
 
@@ -83,6 +136,8 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          
+           //Text(name, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: _textPrimary)),
           const Text(
             'Good Morning,',
             style: TextStyle(
@@ -165,6 +220,7 @@ class HomeScreen extends StatelessWidget {
             : const Color(0xFF1a3a42);
 
     // FIX: ClipRRect handles border radius so BoxDecoration can have mixed border colors
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
@@ -222,29 +278,13 @@ class HomeScreen extends StatelessWidget {
 
   // add task button / FAB (floating action button)
   Widget _buildFab() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14),
-      // FIX 7: was missing comma after `padding`, causing `decoration` to be a
-      // separate statement rather than a named arg — this also caused _buildNavBar
-      // to be parsed as a nested function inside _buildFab
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: _accent,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Center(
-        child: Text(
-          '+ Add task',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: _textPrimary,
-          ),
-        ),
-      ),
-    );
-  } // FIX 8: closing brace was missing here — _buildNavBar was swallowed inside _buildFab
-
+    return FloatingActionButton(onPressed:(){
+// TO OPEN TASK MODAL LATER
+    } , backgroundColor: _accent, foregroundColor: _textPrimary, elevation: 6,
+    shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),),
+    child: const Icon(Icons.add, size: 28),); // its positioned left 
+    // i want it ot be bottom left and some margin so its not directly on the screen or the nav bar
+  }
   // bottom nav bar — static for now, will wire up when other screens are built
   Widget _buildNavBar() {
 
