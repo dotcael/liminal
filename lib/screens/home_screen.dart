@@ -220,21 +220,22 @@ class HomeScreen extends StatelessWidget {
             : const Color(0xFF1a3a42);
 
     // FIX: ClipRRect handles border radius so BoxDecoration can have mixed border colors
+return Container(
+   margin: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+   decoration:BoxDecoration(color: cardBg,  borderRadius: BorderRadius.circular(16),
+   border: Border.all(color: _border, width: 0.5),
+   ),
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+        
+   child:  ClipRRect(
+borderRadius: BorderRadius.circular(16),
       child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 0, 14, 6),
-        padding: const EdgeInsets.all(12),
+       
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: cardBg,
-          border: Border(
-            left: BorderSide(color: borderColor, width: 3),  // urgency accent
-            top: BorderSide(color: _border, width: 0.5),
-            right: BorderSide(color: _border, width: 0.5),
-            bottom: BorderSide(color: _border, width: 0.5),
-          ),
+          border: Border(left: BorderSide(color: borderColor, width: 4),),
         ),
+
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -250,30 +251,31 @@ class HomeScreen extends StatelessWidget {
                       color: _textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     meta,
-                    style: const TextStyle(fontSize: 10, color: _textSecondary),
+                    style: const TextStyle(fontSize: 10.5, color: _textSecondary),
                   ),
                 ],
               ),
             ),
             // due date badge — color matches urgency level
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: badgeBg,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 dueBadge,
-                style: TextStyle(fontSize: 9, color: badgeText),
+                style: TextStyle(fontSize: 9.5, color: badgeText),
               ),
             ),
           ],
         ),
       ),
-    );
+    )
+);
   }
 
   // add task button / FAB (floating action button)
