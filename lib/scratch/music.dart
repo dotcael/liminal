@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-
+//refernce code
 // urgency levels used to drive card styling
 enum _Urgency { urgent, soon, later }
 
@@ -103,7 +103,7 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
-
+//
   // reusable colored pill chip for the summary row
   Widget _buildSummaryChip(String label, Color textColor, Color bgColor) {
     return Container(
@@ -218,7 +218,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // add task button — full width
+  // add task button /FAB = floating action buttton
   Widget _buildFab() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14),
