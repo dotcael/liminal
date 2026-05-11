@@ -128,7 +128,7 @@ Positioned(
                 const SizedBox(height: 32),
 
                 const Text(
-                  'liminal',
+                  'Liminal',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w500,

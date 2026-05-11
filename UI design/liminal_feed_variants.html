@@ -1,0 +1,338 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font-sans);}
+.variants-wrap{display:flex;flex-direction:column;gap:32px;padding:8px 0 24px;}
+.variant-label{font-size:11px;color:#6b6b9a;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px;padding-left:2px;}
+.variant-tag{display:inline-block;font-size:9px;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;font-weight:500;}
+.tag-a{background:#2a2a5a;color:#8888dd;}
+.tag-b{background:#1a3a28;color:#5abba0;}
+.tag-c{background:#3a2a10;color:#c49040;}
+
+.phone{width:320px;margin:0 auto;background:#1a1a2e;border-radius:28px;border:1px solid #2d2d4a;overflow:hidden;font-family:var(--font-sans);}
+.sbar{padding:9px 16px 5px;display:flex;justify-content:space-between;align-items:center;}
+.stime{font-size:10px;color:#6b6b9a;font-weight:500;}
+.sdots{display:flex;gap:4px;}
+.sd{width:4px;height:4px;border-radius:50%;background:#6b6b9a;}
+.sd.on{background:#4a4aaa;}
+
+/* ── VARIANT A: Timeline ── */
+.va-header{padding:10px 16px 0;border-bottom:0.5px solid #2d2d4a;}
+.va-title{font-size:17px;font-weight:500;color:#e8e8f4;margin-bottom:8px;}
+.va-filters{display:flex;gap:5px;padding-bottom:9px;overflow-x:auto;scrollbar-width:none;}
+.va-filters::-webkit-scrollbar{display:none;}
+.vchip{padding:3px 9px;border-radius:20px;font-size:10px;white-space:nowrap;border:0.5px solid #2d2d4a;color:#6b6b9a;background:#22223a;cursor:pointer;}
+.vchip.on{background:#4a4aaa;border-color:#4a4aaa;color:#e8e8f4;}
+
+.va-feed{padding:10px 0 12px;}
+.va-datelabel{font-size:9px;color:#4a4a6a;letter-spacing:0.5px;text-transform:uppercase;padding:4px 16px 6px;}
+
+.tl-row{display:flex;gap:0;margin:0 0 4px;}
+.tl-line-col{width:32px;display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
+.tl-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid #4a4aaa;background:#1a1a2e;margin-top:13px;flex-shrink:0;z-index:1;}
+.tl-dot.ur{border-color:#d85a30;}
+.tl-dot.fi{border-color:#c49040;}
+.tl-dot.pe{border-color:#4a9a60;}
+.tl-vline{width:1px;background:#2d2d4a;flex:1;margin-top:2px;}
+.tl-card{flex:1;margin:6px 14px 6px 0;padding:10px 11px;border-radius:10px;background:#22223a;border:0.5px solid #2d2d4a;position:relative;overflow:hidden;}
+.tl-card.ur{background:#231a1a;}
+.tl-card::after{content:'';position:absolute;top:0;left:0;bottom:0;width:2.5px;}
+.tl-card.ac::after{background:#5c5cd6;}
+.tl-card.ur::after{background:#d85a30;}
+.tl-card.fi::after{background:#c49040;}
+.tl-card.pe::after{background:#4a9a60;}
+.tl-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.tl-src{font-size:9px;color:#6b6b9a;}
+.tl-time{font-size:9px;color:#4a4a6a;}
+.tl-ttl{font-size:11px;font-weight:500;color:#e8e8f4;line-height:1.4;margin-bottom:2px;}
+.tl-meta{font-size:9px;color:#6b6b9a;}
+.tl-foot{display:flex;align-items:center;justify-content:space-between;margin-top:7px;}
+.tbadge{font-size:8px;padding:2px 6px;border-radius:5px;}
+.tbadge.ac{background:#2a2a5a;color:#8888dd;}
+.tbadge.ur{background:#3a1a1a;color:#d87a5a;}
+.tbadge.fi{background:#3a2a10;color:#c49040;}
+.tbadge.pe{background:#1a3a28;color:#5abba0;}
+.tdue{font-size:9px;color:#4a4a6a;}
+.tdue.hot{color:#d87a5a;}
+
+/* ── VARIANT B: Grouped categories ── */
+.vb-header{padding:10px 16px 0;}
+.vb-title{font-size:17px;font-weight:500;color:#e8e8f4;margin-bottom:6px;}
+.vb-sub{font-size:10px;color:#6b6b9a;margin-bottom:10px;}
+.vb-tabs{display:flex;border-bottom:0.5px solid #2d2d4a;margin:0 -0px;}
+.vtab{flex:1;text-align:center;padding:7px 4px;font-size:10px;color:#6b6b9a;border-bottom:2px solid transparent;cursor:pointer;}
+.vtab.on{color:#e8e8f4;border-bottom-color:#4a4aaa;}
+.vtab.on.ac{border-bottom-color:#5c5cd6;}
+.vtab.on.fi{border-bottom-color:#c49040;}
+.vtab.on.pe{border-bottom-color:#4a9a60;}
+
+.vb-feed{padding:10px 0 12px;}
+.grp-header{display:flex;align-items:center;gap:8px;padding:4px 14px 8px;}
+.grp-bar{flex:1;height:0.5px;background:#2d2d4a;}
+.grp-label{font-size:9px;color:#6b6b9a;white-space:nowrap;}
+.grp-count{font-size:9px;padding:1px 6px;border-radius:8px;}
+.grp-count.ac{background:#2a2a5a;color:#8888dd;}
+.grp-count.ur{background:#3a1a1a;color:#d87a5a;}
+.grp-count.fi{background:#3a2a10;color:#c49040;}
+
+.b-card{margin:0 12px 5px;padding:10px 11px;border-radius:10px;background:#22223a;border:0.5px solid #2d2d4a;}
+.b-card.ur{background:#231a1a;border-color:#3a2020;}
+.b-ttl{font-size:11px;font-weight:500;color:#e8e8f4;margin-bottom:2px;line-height:1.4;}
+.b-meta{font-size:9px;color:#6b6b9a;margin-bottom:6px;}
+.b-foot{display:flex;align-items:center;justify-content:space-between;}
+.b-src{font-size:9px;color:#4a4a6a;}
+.b-due{font-size:9px;}
+.b-due.hot{color:#d87a5a;}
+.b-due.norm{color:#6b6b9a;}
+.b-actions{display:flex;gap:5px;margin-top:7px;}
+.bact{padding:3px 9px;border-radius:6px;font-size:9px;background:#1a1a2e;border:0.5px solid #2d2d4a;color:#6b6b9a;}
+.bact.p{background:#3a3a7a;border-color:#5c5cd6;color:#a0a0ee;}
+
+/* ── VARIANT C: Minimal List ── */
+.vc-header{padding:10px 16px 8px;display:flex;justify-content:space-between;align-items:center;border-bottom:0.5px solid #2d2d4a;}
+.vc-left{}
+.vc-title{font-size:17px;font-weight:500;color:#e8e8f4;}
+.vc-sub{font-size:9px;color:#6b6b9a;margin-top:1px;}
+.vc-sort{font-size:9px;color:#4a4aaa;border:0.5px solid #4a4aaa44;padding:3px 8px;border-radius:8px;background:#22223a;}
+
+.vc-feed{padding:6px 0 12px;}
+.vc-row{display:flex;align-items:flex-start;gap:10px;padding:9px 14px;border-bottom:0.5px solid #1e1e38;}
+.vc-row:last-child{border-bottom:none;}
+.vc-accent{width:3px;height:36px;border-radius:2px;flex-shrink:0;margin-top:2px;}
+.vc-accent.ac{background:#5c5cd6;}
+.vc-accent.ur{background:#d85a30;}
+.vc-accent.fi{background:#c49040;}
+.vc-accent.pe{background:#4a9a60;}
+.vc-body{flex:1;}
+.vc-src{font-size:9px;color:#6b6b9a;margin-bottom:2px;}
+.vc-ttl{font-size:11px;font-weight:500;color:#e8e8f4;line-height:1.4;margin-bottom:2px;}
+.vc-foot{display:flex;align-items:center;gap:8px;}
+.vc-cat{font-size:8px;padding:1px 6px;border-radius:5px;}
+.vc-cat.ac{background:#2a2a5a;color:#8888dd;}
+.vc-cat.ur{background:#3a1a1a;color:#d87a5a;}
+.vc-cat.fi{background:#3a2a10;color:#c49040;}
+.vc-cat.pe{background:#1a3a28;color:#5abba0;}
+.vc-due{font-size:9px;color:#4a4a6a;}
+.vc-due.hot{color:#d87a5a;}
+.vc-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
+.vc-time{font-size:9px;color:#4a4a6a;}
+.vc-dot-unread{width:6px;height:6px;border-radius:50%;background:#4a4aaa;}
+
+/* shared nav */
+.nav{border-top:0.5px solid #2d2d4a;padding:9px 0 7px;display:flex;justify-content:space-around;}
+.ni{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.ni-box{width:16px;height:16px;border-radius:4px;}
+.ni-box.on{background:#3a3a7a;}
+.ni-box.off{background:#2d2d4a;}
+.ni-lbl{font-size:8px;}
+.ni-lbl.on{color:#7b7bcc;}
+.ni-lbl.off{color:#6b6b9a;}
+</style>
+
+<div class="variants-wrap">
+
+  <div>
+    <div class="variant-label">Variant A <span class="variant-tag tag-a">Timeline</span></div>
+    <div class="phone">
+      <div class="sbar"><span class="stime">9:41</span><div class="sdots"><div class="sd on"></div><div class="sd on"></div><div class="sd"></div></div></div>
+      <div class="va-header">
+        <div class="va-title">Feed</div>
+        <div class="va-filters">
+          <div class="vchip on">All</div>
+          <div class="vchip">Academic</div>
+          <div class="vchip">Personal</div>
+          <div class="vchip">Financial</div>
+        </div>
+      </div>
+      <div class="va-feed">
+        <div class="va-datelabel">Today</div>
+        <div class="tl-row">
+          <div class="tl-line-col"><div class="tl-dot ur"></div><div class="tl-vline"></div></div>
+          <div class="tl-card ur ac" style="border-radius:0 10px 10px 0;">
+            <div class="tl-top"><span class="tl-src">Dr. Sibanda · CS Dept</span><span class="tl-time">8:02</span></div>
+            <div class="tl-ttl">Assignment 3 deadline is firm</div>
+            <div class="tl-meta">No extensions. Closes Friday 11:59pm.</div>
+            <div class="tl-foot"><span class="tbadge ur">Urgent</span><span class="tdue hot">Due in 2 days</span></div>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-line-col"><div class="tl-dot"></div><div class="tl-vline"></div></div>
+          <div class="tl-card ac" style="border-radius:0 10px 10px 0;">
+            <div class="tl-top"><span class="tl-src">SE · Year 3</span><span class="tl-time">7:45</span></div>
+            <div class="tl-ttl">Lecture moved — Room B4, 8am tomorrow</div>
+            <div class="tl-foot"><span class="tbadge ac">Academic</span><span class="tdue">Tomorrow</span></div>
+          </div>
+        </div>
+        <div class="tl-row">
+          <div class="tl-line-col"><div class="tl-dot fi"></div><div class="tl-vline"></div></div>
+          <div class="tl-card fi" style="border-radius:0 10px 10px 0;">
+            <div class="tl-top"><span class="tl-src">Finance Office</span><span class="tl-time">6:30</span></div>
+            <div class="tl-ttl">Semester 2 fees — balance outstanding</div>
+            <div class="tl-meta">$420 due before the 30th.</div>
+            <div class="tl-foot"><span class="tbadge fi">Financial</span><span class="tdue hot">10 days</span></div>
+          </div>
+        </div>
+        <div class="va-datelabel">Yesterday</div>
+        <div class="tl-row">
+          <div class="tl-line-col"><div class="tl-dot pe"></div><div class="tl-vline" style="background:transparent;"></div></div>
+          <div class="tl-card pe" style="border-radius:0 10px 10px 0;">
+            <div class="tl-top"><span class="tl-src">Personal</span><span class="tl-time">9:00pm</span></div>
+            <div class="tl-ttl">Review chapter 2 notes</div>
+            <div class="tl-foot"><span class="tbadge pe">Personal</span><span class="tdue">Friday</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Home</span></div>
+        <div class="ni"><div class="ni-box on"></div><span class="ni-lbl on">Feed</span></div>
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Tasks</span></div>
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Profile</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="variant-label">Variant B <span class="variant-tag tag-b">Grouped</span></div>
+    <div class="phone">
+      <div class="sbar"><span class="stime">9:41</span><div class="sdots"><div class="sd on"></div><div class="sd on"></div><div class="sd"></div></div></div>
+      <div class="vb-header">
+        <div class="vb-title">Feed</div>
+        <div class="vb-sub">11 items · 3 unread</div>
+      </div>
+      <div class="vb-tabs">
+        <div class="vtab on ac">Academic</div>
+        <div class="vtab">Personal</div>
+        <div class="vtab">Financial</div>
+      </div>
+      <div class="vb-feed">
+        <div class="grp-header">
+          <span class="grp-label">Urgent</span>
+          <span class="grp-count ur">1</span>
+          <div class="grp-bar"></div>
+        </div>
+        <div class="b-card ur">
+          <div class="b-ttl">Assignment 3 deadline is firm — no extensions</div>
+          <div class="b-meta">Dr. Sibanda · CS Dept · Today 8:02am</div>
+          <div class="b-foot">
+            <span class="b-src">Submission closes Friday</span>
+            <span class="b-due hot">2 days left</span>
+          </div>
+        </div>
+        <div class="grp-header" style="margin-top:8px;">
+          <span class="grp-label">This week</span>
+          <span class="grp-count ac">3</span>
+          <div class="grp-bar"></div>
+        </div>
+        <div class="b-card">
+          <div class="b-ttl">Lecture rescheduled — Room B4, 8am</div>
+          <div class="b-meta">SE · Year 3 · Today 7:45am</div>
+          <div class="b-foot">
+            <span class="b-src">Mandatory attendance</span>
+            <span class="b-due norm">Tomorrow</span>
+          </div>
+          <div class="b-actions">
+            <div class="bact p">Add to calendar</div>
+            <div class="bact">Dismiss</div>
+          </div>
+        </div>
+        <div class="b-card">
+          <div class="b-ttl">Algorithms Unlocked — overdue return</div>
+          <div class="b-meta">Library · Yesterday 2:10pm</div>
+          <div class="b-foot">
+            <span class="b-src">Fines apply after 7 days</span>
+            <span class="b-due hot">Overdue</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Home</span></div>
+        <div class="ni"><div class="ni-box on"></div><span class="ni-lbl on">Feed</span></div>
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Tasks</span></div>
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Profile</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="variant-label">Variant C <span class="variant-tag tag-c">Minimal list</span></div>
+    <div class="phone">
+      <div class="sbar"><span class="stime">9:41</span><div class="sdots"><div class="sd on"></div><div class="sd on"></div><div class="sd"></div></div></div>
+      <div class="vc-header">
+        <div class="vc-left">
+          <div class="vc-title">Feed</div>
+          <div class="vc-sub">3 unread · Monday 20 Apr</div>
+        </div>
+        <div class="vc-sort">Latest first</div>
+      </div>
+      <div class="vc-feed">
+        <div class="vc-row">
+          <div class="vc-accent ur"></div>
+          <div class="vc-body">
+            <div class="vc-src">Dr. Sibanda · CS Dept</div>
+            <div class="vc-ttl">Assignment 3 deadline is firm — no extensions</div>
+            <div class="vc-foot">
+              <span class="vc-cat ur">Urgent</span>
+              <span class="vc-due hot">2 days left</span>
+            </div>
+          </div>
+          <div class="vc-right"><span class="vc-time">8:02</span><div class="vc-dot-unread"></div></div>
+        </div>
+        <div class="vc-row">
+          <div class="vc-accent ac"></div>
+          <div class="vc-body">
+            <div class="vc-src">SE · Year 3</div>
+            <div class="vc-ttl">Lecture moved — Room B4, 8am tomorrow</div>
+            <div class="vc-foot">
+              <span class="vc-cat ac">Academic</span>
+              <span class="vc-due">Tomorrow</span>
+            </div>
+          </div>
+          <div class="vc-right"><span class="vc-time">7:45</span><div class="vc-dot-unread"></div></div>
+        </div>
+        <div class="vc-row">
+          <div class="vc-accent fi"></div>
+          <div class="vc-body">
+            <div class="vc-src">Finance Office</div>
+            <div class="vc-ttl">Semester 2 fees — $420 outstanding</div>
+            <div class="vc-foot">
+              <span class="vc-cat fi">Financial</span>
+              <span class="vc-due hot">10 days</span>
+            </div>
+          </div>
+          <div class="vc-right"><span class="vc-time">6:30</span><div class="vc-dot-unread"></div></div>
+        </div>
+        <div class="vc-row">
+          <div class="vc-accent pe"></div>
+          <div class="vc-body">
+            <div class="vc-src">Personal</div>
+            <div class="vc-ttl">Review chapter 2 notes</div>
+            <div class="vc-foot">
+              <span class="vc-cat pe">Personal</span>
+              <span class="vc-due">Friday</span>
+            </div>
+          </div>
+          <div class="vc-right"><span class="vc-time">9pm</span></div>
+        </div>
+        <div class="vc-row">
+          <div class="vc-accent ac"></div>
+          <div class="vc-body">
+            <div class="vc-src">Library</div>
+            <div class="vc-ttl">Algorithms Unlocked — overdue return</div>
+            <div class="vc-foot">
+              <span class="vc-cat ac">Academic</span>
+              <span class="vc-due hot">Overdue</span>
+            </div>
+          </div>
+          <div class="vc-right"><span class="vc-time">2:10pm</span></div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Home</span></div>
+        <div class="ni"><div class="ni-box on"></div><span class="ni-lbl on">Feed</span></div>
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Tasks</span></div>
+        <div class="ni"><div class="ni-box off"></div><span class="ni-lbl off">Profile</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
