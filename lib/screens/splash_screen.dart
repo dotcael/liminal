@@ -1,5 +1,9 @@
+import 'home_screen.dart';
 import 'package:flutter/material.dart';
 import 'auth_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -9,20 +13,43 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
+  _checkAuthAndNavigate();
+}
+Future<void> _checkAuthAndNavigate() async {
+  await Future.delayed(const Duration(seconds: 3));
 
-//dont piss me off the 3 hours is a placeholder cuz we're actively workng on it. if not 
-//it will show me the auth screnafter 3 seconds . 
-    Future.delayed(const Duration(seconds: 3), () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const AuthScreen()),
-      );
-    });
+  final user = FirebaseAuth.instance.currentUser;
+
+  if (!mounted) return;
+
+
+  if (user != null) {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    final name = doc.data()?['name'] ?? 'there';
+    final role = doc.data()?['role'] ?? 'student';
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HomeScreen(name: name, role: role),
+      ),
+    );
+  } else {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const AuthScreen()),
+    );
   }
-
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -31,54 +58,62 @@ class _SplashScreenState extends State<SplashScreen> {
         alignment: Alignment.center,
         children: [
           // Ring 1
-       
-Positioned(
-  top: MediaQuery.of(context).size.height * 0.15,
-  left: 0,
-  right: 0,
-  child: Center(
-    child: Container(
-      width: 320,
-      height: 320,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF2d2d4a), width: 0.5),
-      ),
-    ),
-  ),
-),
-// Ring 2
-Positioned(
-  top: MediaQuery.of(context).size.height * 0.20,
-  left: 0,
-  right: 0,
-  child: Center(
-    child: Container(
-      width: 250,
-      height: 347,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF2d2d4a), width: 0.5),
-      ),
-    ),
-  ),
-),
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.15,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                width: 320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFF2d2d4a),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
           // Ring 2
-Positioned(
-  top: MediaQuery.of(context).size.height * 0.20,
-  left: 0,
-  right: 0,
-  child: Center(
-    child: Container(
-      width: 250,
-      height: 250,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF2d2d4a), width: 0.5),
-      ),
-    ),
-  ),
-),
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                width: 250,
+                height: 347,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFF2d2d4a),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Ring 2
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                width: 250,
+                height: 250,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFF2d2d4a),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
 
           //  CENTER CONTENT (
           Center(
@@ -147,8 +182,6 @@ Positioned(
                     letterSpacing: 2,
                   ),
                 ),
-
-              
               ],
             ),
           ),
@@ -161,11 +194,7 @@ Positioned(
             right: 0,
             child: Column(
               children: [
-                Container(
-                  width: 30,
-                  height: 1,
-                  color: const Color(0xFF2d2d4a),
-                ),
+                Container(width: 30, height: 1, color: const Color(0xFF2d2d4a)),
                 const SizedBox(height: 12),
                 const Text(
                   'For KouZoya 🌹',

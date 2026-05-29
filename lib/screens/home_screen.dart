@@ -69,22 +69,7 @@ class HomeScreen extends StatelessWidget {
                       urgency: _Urgency.later,
                   
                     ),
-                    _buildTaskCard(
-
-                      title: 'Cross Check IDCL Terms',
-                      meta: 'Personal ',
-                      dueBadge: 'Friday',
-                      urgency: _Urgency.later,
-                  
-                    ),
-                    _buildTaskCard(
-
-                      title: 'Cross Check IDCL Terms',
-                      meta: 'Personal ',
-                      dueBadge: 'Friday',
-                      urgency: _Urgency.soon,
-                  
-                    ),
+            
                     _buildTaskCard(
 
                       title: 'Pay School fees',
@@ -93,22 +78,8 @@ class HomeScreen extends StatelessWidget {
                       urgency: _Urgency.urgent,
                   
                     ),
-                    _buildTaskCard(
-
-                      title: 'Cross Check IDCL Terms',
-                      meta: 'Personal ',
-                      dueBadge: 'Friday',
-                      urgency: _Urgency.later,
                   
-                    ),
-                      _buildTaskCard(
-
-                      title: 'Pay School fees',
-                      meta: 'Academic ',
-                      dueBadge: 'Friday',
-                      urgency: _Urgency.urgent,
-                  
-                      ),
+                     
                     const SizedBox(height: 12),
                    
                     const SizedBox(height: 16),
@@ -302,7 +273,7 @@ borderRadius: BorderRadius.circular(16),
         children: [
           _buildNavItem('Home', isActive: true),
           _buildNavItem('Feed'),
-          _buildNavItem('Task'),
+        //  _buildNavItem('Tasks'),
           _buildNavItem('Profile'),
         ],
       ),
