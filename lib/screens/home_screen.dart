@@ -87,7 +87,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ),
-            _buildNavBar(),
+            // _buildNavBar(),
           ],
         ),
       ),
@@ -259,26 +259,26 @@ borderRadius: BorderRadius.circular(16),
     // i want it ot be bottom left and some margin so its not directly on the screen or the nav bar
   }
   // bottom nav bar — static for now, will wire up when other screens are built
-  Widget _buildNavBar() {
+  // Widget _buildNavBar() {
 
-    // after decoration — restructured so decoration, padding, and child are all
-    // proper named args of the same Container
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: _border, width: 0.5)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem('Home', isActive: true),
-          _buildNavItem('Feed'),
-        //  _buildNavItem('Tasks'),
-          _buildNavItem('Profile'),
-        ],
-      ),
-    );
-  }
+  //   // after decoration — restructured so decoration, padding, and child are all
+  //   // proper named args of the same Container
+  //   return Container(
+  //     decoration: const BoxDecoration(
+  //       border: Border(top: BorderSide(color: _border, width: 0.5)),
+  //     ),
+  //     padding: const EdgeInsets.symmetric(vertical: 10),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceAround,
+  //       children: [
+  //         _buildNavItem('Home', isActive: true),
+  //         _buildNavItem('Feed'),
+  //       //  _buildNavItem('Tasks'),
+  //         _buildNavItem('Profile'),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   // individual nav item — active state uses accent color
   Widget _buildNavItem(String label, {bool isActive = false}) {

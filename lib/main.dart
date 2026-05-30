@@ -3,10 +3,13 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
+
 import 'screens/auth_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
-//import 'screens/feed_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/feed_screen.dart';
+import 'screens/shell_screen.dart';
 
 void main() async {
   // ensures flutter engine is fully ready before any async work runs
@@ -52,8 +55,7 @@ class LiminalApp extends StatelessWidget {
 // },
       // app always opens at splash first
       // initialRoute: 'splash',
-     home: const HomeScreen(name: 'Test User', role: 'Admin'),
-     // home: const FeedScreen(),
+home: const ShellScreen(name: 'Test User', role: 'student'),     
           //  home: const SplashScreen(),
 
     );

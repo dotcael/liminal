@@ -1,7 +1,8 @@
+// John 3:16-17
+
 import 'package:flutter/material.dart';
 
-//stateful to do shi like changing based on what filter is picked
-
+// stateful because the screen reacts to filter chip taps
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
 
@@ -10,10 +11,7 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-
-  //static mean constants belong to the class not an instance thus they dont
-  // need this.x to be used.
-
+  // ── color system ─────────────────────────────────────────────────────────────
   static const _bg = Color(0xFF1a1a2e);
   static const _surface = Color(0xFF22223a);
   static const _border = Color(0xFF2d2d4a);
@@ -22,125 +20,145 @@ class _FeedScreenState extends State<FeedScreen> {
   static const _textMuted = Color(0xFF6b6b9a);
   static const _textDim = Color(0xFF4a4a6a);
 
-  // category accent colors — left bar + timeline dot
+  // category accent colors — left border + timeline dot
   static const _colorAcademic = Color(0xFF5c5cd6);
   static const _colorPersonal = Color(0xFF4a9a60);
   static const _colorFinancial = Color(0xFFc49040);
+  // urgent is now a flag, not a category — but we still need a color for it
   static const _colorUrgent = Color(0xFFd85a30);
 
-  // badge bg / text pairs per category
+  // badge background / text pairs per category
   static const _badgeBgAcademic = Color(0xFF2a2a5a);
   static const _badgeTxtAcademic = Color(0xFF8888dd);
   static const _badgeBgPersonal = Color(0xFF1a3a28);
   static const _badgeTxtPersonal = Color(0xFF5abba0);
   static const _badgeBgFinancial = Color(0xFF3a2a10);
   static const _badgeTxtFinancial = Color(0xFFc49040);
+  // urgent badge colors — used when isUrgent is true, regardless of category
   static const _badgeBgUrgent = Color(0xFF3a1a1a);
   static const _badgeTxtUrgent = Color(0xFFd87a5a);
 
-  //Acticely selected filter, Defaults to showing all
+  // the currently selected filter chip — defaults to showing everything
   _FeedFilter _activeFilter = _FeedFilter.all;
 
-  //Feed items
+  // ── feed data ─────────────────────────────────────────────────────────────────
+  // in the real app this will come from Firestore — hardcoded for the prototype
   final List<_FeedItem> _items = const [
     _FeedItem(
-      isUrgent: true,
+      // academic category + isUrgent: true — deadline announcement
       category: _FeedCategory.academic,
+      isUrgent: true,
       source: 'Mr. Musa · CS Dept',
-      title: 'Assignment 3 deadline update',
-      body: 'Submissions close at Friday, 10pm. Late submissions will not be accepted',
+      title: 'Class and Quiz update',
+      body: 'Class on Monday starts at 8:30,followed by quiz test at 8:50am. Lateness will NOT be tolerated',
       due: '2 days left',
       dueIsHot: true,
-      time: '8:02',
+      time: '8:02am',
       isUnread: true,
       dateGroup: 'Today',
     ),
     _FeedItem(
+      // academic, not urgent — just a venue change
       category: _FeedCategory.academic,
-      source: 'Head of Department',
-      title: 'Exam hall is FAC one',
-      body: ' Second floor, room three',
+      isUrgent: false,
+      source: 'SE · Year 3',
+      title: 'Lecture rescheduled — Room B4, 8am tomorrow',
+      body: 'Venue change only. Topic remains Design Patterns ch. 4.',
       due: 'Tomorrow',
       dueIsHot: false,
-      time: '12:00',
-      isUnread: false,
+      time: '7:45am',
+      isUnread: true,
       dateGroup: 'Today',
       actions: ['Add to calendar', 'Dismiss'],
     ),
     _FeedItem(
-      category: _FeedCategory.academic,
-      source: 'Dr Mutumba',
-      title: 'Class presentation today, starting 10pm',
-      body: ' Fourth floor, room three',
-      due: 'Tomorrow',
-      dueIsHot: false,
-      time: '12:00',
-      isUnread: false,
-      dateGroup: 'Today',
-    ),
-    _FeedItem(
-      isUrgent: true,
+      // financial category + isUrgent: true — overdue fees
       category: _FeedCategory.financial,
+      isUrgent: true,
       source: 'Finance Office',
-      title: 'Second Semester fees - arrears',
-      body: 'Payment must be done by March 3rd, to be elligable for subsequent exams',
-      due: 'Tomorrow',
-      dueIsHot: false,
-      time: '12:00',
-      isUnread: false,
+      title: 'Semester 2 fees — balance outstanding',
+      // 'r' prefix = raw string, tells Dart to treat $ as a literal symbol
+      body: r'$420 due before the 30th to avoid a late fee.',
+      due: '10 days',
+      dueIsHot: true,
+      time: '6:30am',
+      isUnread: true,
       dateGroup: 'Today',
-      actions: ['Add to calendar', 'Dismiss'],
+      actions: ['View statement', 'Snooze'],
     ),
     _FeedItem(
-      isUrgent: true,
+      // personal, not urgent — self-added reminder
       category: _FeedCategory.personal,
+      isUrgent: false,
       source: 'Personal',
-      title: 'Revise Study Questions',
-      body: ' Study CAT 2 exam questions',
-      due: 'Today',
+      title: 'Review chapter 2 notes',
+      body: 'You added this task 3 days ago. No progress logged yet.',
+      due: 'Friday',
+      dueIsHot: false,
+      time: '9:00pm',
+      isUnread: false,
+      dateGroup: 'Yesterday',
+    ),
+    _FeedItem(
+      // academic, urgent — overdue library book
+      category: _FeedCategory.academic,
+      isUrgent: true,
+      source: 'Library · Resource Notice',
+      title: 'Borrowed book overdue — Algorithms Unlocked',
+      body: 'Return or renew by end of week. Fines apply after 7 days.',
+      due: 'Overdue',
       dueIsHot: true,
-      time: '8:03am',
-      isUnread: true,
+      time: '2:10pm',
+      isUnread: false,
       dateGroup: 'Yesterday',
     ),
   ];
 
-  //filter items based on active filter
-  List<_FeedItem> get _visibleItems {
-    if (_activeFilter == _FeedFilter.all) return _items;
+  // ── computed properties ───────────────────────────────────────────────────────
 
-    //where loops through and only returns those that pass the test
+  // filters _items based on which chip is active
+  List<_FeedItem> get _visibleItems {
+
+    if (_activeFilter == _FeedFilter.all) return _items;
+    
     return _items.where((item) {
       switch (_activeFilter) {
         case _FeedFilter.urgent:
+          // urgent filter shows any item flagged as urgent, across all categories
           return item.isUrgent;
+
         case _FeedFilter.academic:
           return item.category == _FeedCategory.academic;
-        case _FeedFilter.financial:
-          return item.category == _FeedCategory.financial;
+
         case _FeedFilter.personal:
           return item.category == _FeedCategory.personal;
-        // safety fallback
+
+        case _FeedFilter.financial:
+          return item.category == _FeedCategory.financial;
+
+          //safeguard incase the case reaches here
         case _FeedFilter.all:
           return true;
       }
     }).toList();
   }
 
+  // pulls unique date group labels in the order they appear — keeps sections sorted
   List<String> get _dateGroups {
+    //empty  box
     final seen = <String>{};
+    //groups list
     final groups = <String>[];
-
     for (final item in _visibleItems) {
       if (seen.add(item.dateGroup)) groups.add(item.dateGroup);
     }
     return groups;
   }
 
-  //counts unread items
+  // counts how many items are still unread for the header badge
   int get _unreadCount => _items.where((i) => i.isUnread).length;
 
-  //build
+  // ── build ─────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -150,22 +168,23 @@ class _FeedScreenState extends State<FeedScreen> {
           children: [
             _buildHeader(),
             Expanded(
-              // if active filter returns nothing, show the empty state
-              child: _visibleItems.isEmpty ? _buildEmptyState() : _buildTimeline(),
+              // if the active filter returns nothing, show the empty state
+              child: _visibleItems.isEmpty
+                  ? _buildEmptyState()
+                  : _buildTimeline(),
             ),
-            _buildNavBar(),
+            // _buildNavBar(),
           ],
         ),
       ),
     );
   }
 
-  // define the header
+  // ── header ────────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
       decoration: const BoxDecoration(
-        // FIX: BorderState → BorderSide
         border: Border(bottom: BorderSide(color: _border, width: 0.5)),
       ),
       child: Column(
@@ -181,20 +200,15 @@ class _FeedScreenState extends State<FeedScreen> {
                   color: _textPrimary,
                 ),
               ),
-
-              //unread badge
-              // conditional spread — if 0 unread, nothing added
-              // if > 0, both the spacer and badge drop in as a unit
+              // unread badge — only shown when there are unread items
               if (_unreadCount > 0) ...[
                 const SizedBox(width: 8),
                 Container(
-                  // FIX: symmmetric → symmetric
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
                     color: _badgeBgAcademic,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  // $ inserts the value of _unreadCount into the string
                   child: Text(
                     '$_unreadCount new',
                     style: const TextStyle(fontSize: 9, color: _badgeTxtAcademic),
@@ -203,17 +217,13 @@ class _FeedScreenState extends State<FeedScreen> {
               ],
             ],
           ),
-
           const SizedBox(height: 10),
-
+          // scrollable filter chip row — maps every _FeedFilter value to a chip
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              // FIX: _feedFilterValues → _FeedFilter.values
-              // FIX: .List() → .toList()
-              // FIX: childern → children
-              // .map() loops through every enum value and calls _buildFilterChip with it
-              // (f) is the name we gave each value as it comes through the loop
+              //make a filter chip for all enum values [all,personal,financial,accademic] etc
+
               children: _FeedFilter.values
                   .map((f) => _buildFilterChip(f))
                   .toList(),
@@ -225,23 +235,18 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  // Filter chip that lights up when active
-  // 'filter' parameter receives whichever enum value .map() is currently on
+  // ── filter chip ───────────────────────────────────────────────────────────────
   Widget _buildFilterChip(_FeedFilter filter) {
-    // isActive is true only when this chip matches the currently selected filter
-    final isActive = _activeFilter == filter;
-
+    final isActive = _activeFilter
+     == filter;
     return GestureDetector(
-      // FIX: GestureDector → GestureDetector
-      // FIX: onTap() >= → onTap: () =>
-      // setState tells Flutter something changed, trigger a rebuild
-      // _activeFilter updates to this chip's value, _visibleItems recomputes
+    
+      // setState triggers a rebuild — _visibleItems recomputes with the new filter
       onTap: () => setState(() => _activeFilter = filter),
       child: Container(
         margin: const EdgeInsets.only(right: 6, bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
         decoration: BoxDecoration(
-          // ternary — active gets accent fill, inactive gets surface
           color: isActive ? _accent : _surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
@@ -249,7 +254,6 @@ class _FeedScreenState extends State<FeedScreen> {
             width: 0.5,
           ),
         ),
-        // filter.label calls the label getter on the enum — returns 'Academic', 'Urgent' etc
         child: Text(
           filter.label,
           style: TextStyle(
@@ -261,7 +265,7 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  //Timeline
+  // ── timeline ──────────────────────────────────────────────────────────────────
   Widget _buildTimeline() {
     return ListView(
       padding: const EdgeInsets.only(top: 10, bottom: 16),
@@ -276,14 +280,12 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _buildDateLabel(String label) {
     return Padding(
-      // FIX: padding → Padding (widget name is capitalised)
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
       child: Text(
         label.toUpperCase(),
         style: const TextStyle(
           fontSize: 9,
           color: _textDim,
-          // FIX: letterSpace → letterSpacing
           letterSpacing: 0.5,
         ),
       ),
@@ -291,40 +293,34 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   List<Widget> _buildGroupItems(String group) {
-    // FIX: =- → == (was assigning instead of comparing)
     final groupItems = _visibleItems.where((i) => i.dateGroup == group).toList();
 
     return List.generate(groupItems.length, (index) {
       final item = groupItems[index];
-
-      //last item does not get a line connector
+      // the last item in the entire list gets no connector line below it
       final isLast = group == _dateGroups.last && index == groupItems.length - 1;
       return _buildTimelineRow(item, drawLine: !isLast);
-    });
+    });       
   }
 
-  //timeline row
-  //left dots and lines connecting them and the card they associate with
+  // ── timeline row ──────────────────────────────────────────────────────────────
   Widget _buildTimelineRow(_FeedItem item, {required bool drawLine}) {
-    // if the item is urgent, the dot uses the urgent color regardless of category
-    // else use the default category color — blue for academic, green for personal, yellow for financial
-    // FIX: _colorIsUrgent → _colorUrgent
+    // if the item is urgent, the dot uses the urgent color regardless of category 
+    //else use the default category color nlue for academic, green for personal and yellow for personal
+
     final dotColor = item.isUrgent ? _colorUrgent : _categoryAccentColor(item.category);
 
-    // IntrinsicHeight makes the left column match the card's height
-    // so the vertical line stretches exactly as tall as the card next to it
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          //left column, the dot and the vertical line connector
+          // left column: dot + vertical connector line
           SizedBox(
             width: 32,
             child: Column(
               children: [
                 const SizedBox(height: 14),
                 Container(
-                  // FIX: height, 9 → height: 9
                   width: 9,
                   height: 9,
                   decoration: BoxDecoration(
@@ -344,122 +340,258 @@ class _FeedScreenState extends State<FeedScreen> {
               ],
             ),
           ),
-
-          //right column, the card
-          Expanded(child: Padding(padding: const EdgeInsets.only(right: 14, bottom: 6,
-          top: 6),
-          child: _buildCard(item),),),
-
+          // right column: the card
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 14, bottom: 6, top: 6),
+              child: _buildCard(item),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  //card
+  // ── card ──────────────────────────────────────────────────────────────────────
   Widget _buildCard(_FeedItem item) {
-    //if item is urgent use urgentcolor on border else use the default category color
+    // if urgent, the left border goes red — otherwise it uses the category color
     final leftBorderColor = item.isUrgent ? _colorUrgent : _categoryAccentColor(item.category);
-    // FIX: cardBg was never declared
+
+    // urgent cards also get a slightly warm dark background
     final cardBg = item.isUrgent ? const Color(0xFF231a1a) : _surface;
 
-    //clip rect keeps the right side rounded and the left side straight and colored accordingly
-    return ClipRRect(borderRadius: const BorderRadius.only(topRight: Radius.circular(10), bottomRight: Radius.circular(10),),
-
-    child: Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: cardBg,
-     border: Border(top: const BorderSide(color: _border, width: 0.5),
-     right: const BorderSide(color: _border, width: 0.5),
-     bottom: const BorderSide(color: _border, width: 0.5),
-     left: BorderSide(color: leftBorderColor, width: 2.5),),),
-
-     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-       //source and timestamp
-       // FIX: MainAxisAlignment.start → MainAxisAlignment.spaceBetween
-       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-         // FIX: _textmuted → _textMuted
-         Text(item.source, style: const TextStyle(fontSize: 9, color: _textMuted)),
-         Text(item.time, style: const TextStyle(fontSize: 9, color: _textDim)),
-       ],),
-
-       const SizedBox(height: 4),
-       Text(
-        item.title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500,
-        color: _textPrimary, height: 1.4,),
-       ),
-
-       if (item.body.isNotEmpty) ...[const SizedBox(height: 2),
-         // FIX: _textmuted → _textMuted, colon after _textMuted → comma
-         Text(item.body, style: const TextStyle(fontSize: 9, color: _textMuted, height: 1.5),),
-       ],
-
-       const SizedBox(height: 7),
-       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
-       children: [
-        //bad to show categoty not urgency
-        _buildBadge(item),
-        Text(item.due, style: TextStyle(fontSize: 9, color: item.dueIsHot ? _badgeTxtUrgent : _textDim,),),
-       ],),
-
-       if (item.actions.isNotEmpty) ...[
-         const SizedBox(height: 8),
-         // FIX: item,actions → item.actions
-         Row(children: item.actions.map((label) {
-           final isPrimary = item.actions.indexOf(label) == 0;
-           return Padding(padding: const EdgeInsets.only(right: 6),
-           child: _buildActionButton(label, isPrimary: isPrimary),);
-         }).toList(),),
-       ],
-      ],
-     ),
-    ),
-   );
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        topRight: Radius.circular(10),
+        bottomRight: Radius.circular(10),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: cardBg,
+          border: Border(
+            top: const BorderSide(color: _border, width: 0.5),
+            right: const BorderSide(color: _border, width: 0.5),
+            bottom: const BorderSide(color: _border, width: 0.5),
+            // left border is the urgency-aware color
+            left: BorderSide(color: leftBorderColor, width: 2.5),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // source + timestamp row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(item.source, style: const TextStyle(fontSize: 9, color: _textMuted)),
+                Text(item.time, style: const TextStyle(fontSize: 9, color: _textDim)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.title,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: _textPrimary,
+                height: 1.4,
+              ),
+            ),
+            if (item.body.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                item.body,
+                style: const TextStyle(fontSize: 9, color: _textMuted, height: 1.5),
+              ),
+            ],
+            const SizedBox(height: 7),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // badge shows the real category, not urgency
+                _buildBadge(item),
+                Text(
+                  item.due,
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: item.dueIsHot ? _badgeTxtUrgent : _textDim,
+                  ),
+                ),
+              ],
+            ),
+            if (item.actions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: item.actions.map((label) {
+                  final isPrimary = item.actions.indexOf(label) == 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: _buildActionButton(label, isPrimary: isPrimary),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
-  //badge i am here
-  Widget _buildBadge(_FeedItem item){
-   // if the item is urgent, show an 'Urgent' badge on top of the category badge
+  // ── badge ─────────────────────────────────────────────────────────────────────
+  Widget _buildBadge(_FeedItem item) {
+    // if the item is urgent, show an 'Urgent' badge on top of the category badge
     // this makes both the category and urgency visible at a glance
-
-  return Row(mainAxisSize: MainAxisSize.mi n)
-
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (item.isUrgent) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _badgeBgUrgent,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: const Text(
+              'Urgent',
+              style: TextStyle(fontSize: 8, color: _badgeTxtUrgent),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+        // always show the real category badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: _categoryBadgeBg(item.category),
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: Text(
+            _categoryLabel(item.category),
+            style: TextStyle(fontSize: 8, color: _categoryBadgeText(item.category)),
+          ),
+        ),
+      ],
+    );
   }
 
-}
+  // ── action button ─────────────────────────────────────────────────────────────
+  Widget _buildActionButton(String label, {required bool isPrimary}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: isPrimary ? const Color(0xFF3a3a7a) : _bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isPrimary ? const Color(0xFF5c5cd6) : _border,
+          width: 0.5,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          color: isPrimary ? const Color(0xFFa0a0ee) : _textMuted,
+        ),
+      ),
+    );
+  }
 
-//data model
-class _FeedItem {
-  final _FeedCategory category;
-  final bool isUrgent;
-  final bool dueIsHot;
-  final bool isUnread;
-  final String source;
-  final String title;
-  final String body;
-  final String due;
-  final String time;
-  final String dateGroup;
-  final List<String> actions;
+  // ── empty state ───────────────────────────────────────────────────────────────
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border, width: 0.5),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Nothing here yet',
+            style: TextStyle(fontSize: 13, color: _textMuted),
+          ),
+        ],
+      ),
+    );
+  }
 
-  const _FeedItem({
-    this.isUrgent = false,
-    required this.category,
-    required this.source,
-    required this.title,
-    required this.body,
-    required this.due,
-    required this.dueIsHot,
-    required this.time,
-    required this.isUnread,
-    required this.dateGroup,
-    this.actions = const [],
-  });
+  // ── nav bar ───────────────────────────────────────────────────────────────────
+  // Widget _buildNavBar() {
+  //   return Container(
+  //     decoration: const BoxDecoration(
+  //       border: Border(top: BorderSide(color: _border, width: 0.5)),
+  //     ),
+  //     padding: const EdgeInsets.symmetric(vertical: 10),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceAround,
+  //       children: [
+  //         _buildNavItem('Home', isActive: false),
+  //         _buildNavItem('Feed', isActive: true),
+  //         //_buildNavItem('Tasks', isActive: false),
+  //         _buildNavItem('Profile', isActive: false),
+  //       ],
+  //     ),
+  //   );
+  // }
+
+  // Widget _buildNavItem(String label, {bool isActive = false}) {
+  //   return Column(
+  //     mainAxisSize: MainAxisSize.min,
+  //     children: [
+  //       Container(
+  //         width: 18,
+  //         height: 18,
+  //         decoration: BoxDecoration(
+  //           color: isActive ? const Color(0xFF3a3a7a) : const Color(0xFF2d2d4a),
+  //           borderRadius: BorderRadius.circular(5),
+  //         ),
+  //       ),
+  //       const SizedBox(height: 3),
+  //       Text(
+  //         label,
+  //         style: TextStyle(
+  //           fontSize: 9,
+  //           color: isActive ? const Color(0xFF7b7bcc) : _textMuted,
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
+
+  // ── helpers ───────────────────────────────────────────────────────────────────
+  Color _categoryAccentColor(_FeedCategory cat) => switch (cat) {
+        _FeedCategory.academic => _colorAcademic,
+        _FeedCategory.personal => _colorPersonal,
+        _FeedCategory.financial => _colorFinancial,
+      };
+
+  Color _categoryBadgeBg(_FeedCategory cat) => switch (cat) {
+        _FeedCategory.academic => _badgeBgAcademic,
+        _FeedCategory.personal => _badgeBgPersonal,
+        _FeedCategory.financial => _badgeBgFinancial,
+      };
+
+  Color _categoryBadgeText(_FeedCategory cat) => switch (cat) {
+        _FeedCategory.academic => _badgeTxtAcademic,
+        _FeedCategory.personal => _badgeTxtPersonal,
+        _FeedCategory.financial => _badgeTxtFinancial,
+      };
+
+  String _categoryLabel(_FeedCategory cat) => switch (cat) {
+        _FeedCategory.academic => 'Academic',
+        _FeedCategory.personal => 'Personal',
+        _FeedCategory.financial => 'Financial',
+      };
 }
 
 // ── enums ─────────────────────────────────────────────────────────────────────
-// these live outside the class at file level
-// _FeedFilter drives the chips and which items are visible
-// _FeedCategory is separate — urgency is a flag (isUrgent) not a category
 enum _FeedFilter {
   all,
   urgent,
@@ -476,4 +608,38 @@ enum _FeedFilter {
       };
 }
 
+// urgent is no longer a category — it's removed from _FeedCategory
 enum _FeedCategory { academic, personal, financial }
+
+// ── data model ────────────────────────────────────────────────────────────────
+class _FeedItem {
+  final _FeedCategory category;
+
+  
+  // isUrgent is now a standalone boolean flag — any category can be urgent
+  final bool isUrgent;
+  final String source;
+  final String title;
+  final String body;
+  final String due;
+  final bool dueIsHot;
+  final String time;
+  final bool isUnread;
+  final String dateGroup;
+  final List<String> actions;
+
+  const _FeedItem({
+    required this.category,
+    // isUrgent defaults to false — most items are not urgent
+    this.isUrgent = false,
+    required this.source,
+    required this.title,
+    required this.body,
+    required this.due,
+    required this.dueIsHot,
+    required this.time,
+    required this.isUnread,
+    required this.dateGroup,
+    this.actions = const [],
+  });
+}

@@ -19,5 +19,8 @@ git clone https://github.com/dotcael/liminal.git
 cd liminal
 flutter pub get
 
+to force a push ;
+git push origin main -f
+
 //run
 flutter run -d chrome
