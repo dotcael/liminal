@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'auth_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'shell_screen.dart';
 
 
 class SplashScreen extends StatefulWidget {
@@ -40,7 +41,7 @@ Future<void> _checkAuthAndNavigate() async {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => HomeScreen(name: name, role: role),
+        builder: (context) => ShellScreen(name: name, role: role),
       ),
     );
   } else {

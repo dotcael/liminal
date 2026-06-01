@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'home_screen.dart';
+import'shell_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   //this is the constructor for the auth screen
@@ -144,7 +145,7 @@ class _AuthScreenState extends State<AuthScreen> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => HomeScreen(name: userName, role: userRole)),
+            MaterialPageRoute(builder: (context) => ShellScreen(name: userName, role: userRole)),
           );
         }
       }
