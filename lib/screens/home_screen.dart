@@ -1,5 +1,8 @@
 // John 3:16-17
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 
 // urgency levels used to drive card styling
@@ -595,18 +598,16 @@ class _UploadSheetState extends State<_UploadSheet> {
   Widget _buildSubmitButton() {
     final isPersonal = _activeTab == 0;
     return GestureDetector(
-      onTap: () {
-        // Firestore write goes here in the next step
-      },
+      onTap: _handleSubmit,                         
       child: Container(
-        width: double.infinity,
+        width: double.infinity,                      //span the full width of the parent
         padding: const EdgeInsets.symmetric(vertical: 11),
         decoration: BoxDecoration(
           color: isPersonal ? const Color(0xFF3a6a4a) : _accent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
-          isPersonal ? 'Add task' : 'Broadcast',
+          isPersonal ? 'Add Task' : 'Broadcast',
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontSize: 12,
@@ -617,4 +618,86 @@ class _UploadSheetState extends State<_UploadSheet> {
       ),
     );
   }
-}
+
+  //handle submit — moved inside the class so it can access all instance fields
+  Future<void> _handleSubmit() async {                
+
+    //grab the logged in user
+    final user = FirebaseAuth.instance.currentUser;
+
+    //Defensive Programming  ( if theres no user)
+    if (user == null) {
+      _showToast('Error: user not logged in', isError: true);
+      return;
+    }
+
+    //used to check for unknown exceptions
+    try {
+      if (_activeTab == 0) {
+
+        //validate personal tab then write to personal collection
+        if (_taskNameController.text.trim().isEmpty) {
+          _showToast('Please enter a task', isError: true); 
+          return;
+        }
+        if (_selectedUrgency == null) {
+          _showToast('Please select an urgency level', isError: true);
+          return;
+        }
+
+        await FirebaseFirestore.instance.collection('personal').add({
+          'taskName': _taskNameController.text.trim(),  
+          'dueDate': _taskDueDateController.text.trim(),
+          'urgency': _selectedUrgency,
+          'category': 'Personal',
+          'uid': user.uid,
+          'createdAt': FieldValue.serverTimestamp(),   
+        });
+
+        _showToast('Task added');
+
+      } else {
+        //broadcast tab, validate then write to firebase
+
+        if (_titleController.text.trim().isEmpty) {
+          _showToast('Please enter a title', isError: true);
+          return;
+        }
+
+        if (_selectedUrgency == null) {
+          _showToast('Please select an urgency level', isError: true);
+          return;
+        }
+
+        await FirebaseFirestore.instance.collection('broadcast').add({
+          'title': _titleController.text.trim(),
+          'body': _bodyController.text.trim(),
+          'source': _sourceController.text.trim(),
+          'dueDate': _broadcastDueDateController.text.trim(),
+          'audience': _selectedAudience,
+          'category': _selectedCategory,
+          'urgency': _selectedUrgency,
+          'uid': user.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });                                            
+        _showToast('Broadcast sent');
+      }
+
+      //close sheet after successful write
+      if (mounted) Navigator.pop(context);
+
+    } catch (e) {
+      _showToast('There was an error', isError: true);
+    }
+  }
+
+  void _showToast(String msg, {bool isError = false}) { 
+    Fluttertoast.showToast(
+      msg: msg,
+      backgroundColor: isError ? const Color(0xFF8a3a3a) : const Color(0xFF4a4aaa),
+      textColor: const Color(0xFFe8e8f4),
+      toastLength: Toast.LENGTH_LONG,
+    );
+  }
+
+} 
