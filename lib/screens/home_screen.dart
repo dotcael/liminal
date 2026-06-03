@@ -1,20 +1,25 @@
 // John 3:16-17
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-
-// urgency levels used to drive card styling
 enum _Urgency { urgent, soon, later }
 
-class HomeScreen extends StatelessWidget {
+// changed to StatefulWidget so the task list can rebuild when local storage changes
+class HomeScreen extends StatefulWidget {
   final String name;
   final String role;
 
   const HomeScreen({super.key, required this.name, required this.role});
 
-  // same color system as auth screen
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   static const _bg = Color(0xFF1a1a2e);
   static const _surface = Color(0xFF22223a);
   static const _border = Color(0xFF2d2d4a);
@@ -22,7 +27,6 @@ class HomeScreen extends StatelessWidget {
   static const _textPrimary = Color(0xFFe8e8f4);
   static const _textSecondary = Color(0xFF6b6b9a);
 
-  // urgency badge colors — text and background pairs
   static const _urgentText = Color(0xFFd87a5a);
   static const _urgentBg = Color(0xFF2a1a1a);
   static const _soonText = Color(0xFFc49040);
@@ -30,62 +34,94 @@ class HomeScreen extends StatelessWidget {
   static const _laterText = Color(0xFF5abcd8);
   static const _laterBg = Color(0xFF1a3a42);
 
+  // the in-memory list of personal tasks loaded from local storage
+  // each entry is a Map<String, dynamic> matching what was written by _UploadSheet
+  List<Map<String, dynamic>> _tasks = [];
+
+  // true while _loadTasks is reading from shared_preferences on first mount
+  // used to show a spinner instead of an empty state during the brief read
+  bool _isLoading = true;
+
+  // the key used to store and retrieve the task list in shared_preferences
+  // keeping it as a constant avoids typos if it's referenced in multiple places
+  static const _storageKey = 'personal_tasks';
+
+  @override
+  void initState() {
+    super.initState();
+    // load saved tasks as soon as the screen mounts
+    // initState can't be async itself, so _loadTasks is a separate async method
+    _loadTasks();
+  }
+
+  // reads the JSON string stored under _storageKey and decodes it into _tasks
+  // shared_preferences stores everything as strings — JSON is how we serialize a list of maps
+  Future<void> _loadTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    // getString returns null if the key doesn't exist yet (first launch)
+    final raw = prefs.getString(_storageKey);
+    if (raw != null) {
+      // jsonDecode turns the JSON string back into a Dart List
+      // each element is cast to Map<String, dynamic> so we can access fields by name
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      setState(() {
+        _tasks = decoded.cast<Map<String, dynamic>>();
+      });
+    }
+    // mark loading as done whether or not there were any saved tasks
+    setState(() => _isLoading = false);
+  }
+
+  // writes the current _tasks list to shared_preferences as a JSON string
+  // called after every add and delete so the stored data stays in sync with the UI
+  Future<void> _saveTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_storageKey, jsonEncode(_tasks));
+  }
+
+  // converts the urgency string stored in local storage to the local _Urgency enum
+  // 'Urgent' → _Urgency.urgent, 'Soon' → _Urgency.soon, anything else → _Urgency.later
+  // this is the bridge between what's stored (strings) and what the UI uses (enums)
+  _Urgency _parseUrgency(String? value) {
+    switch (value) {
+      case 'Urgent': return _Urgency.urgent;
+      case 'Soon':   return _Urgency.soon;
+      default:       return _Urgency.later;
+    }
+  }
+
+  // removes the task with the given id from _tasks, redraws the UI, then persists
+  // the removal happens in _tasks first (setState) so the UI updates instantly
+  // _saveTasks then writes the updated list to disk in the background
+  Future<void> _deleteTask(String id) async {
+    setState(() {
+      _tasks.removeWhere((task) => task['id'] == id);
+    });
+    await _saveTasks();
+  }
+
+  // called by _UploadSheet after a successful local save
+  // adds the new task map to _tasks and persists immediately
+  Future<void> _addTask(Map<String, dynamic> task) async {
+    setState(() {
+      // insert at index 0 so the newest task appears at the top
+      // this matches the descending order we had with Firestore's orderBy createdAt
+      _tasks.insert(0, task);
+    });
+    await _saveTasks();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionLabel('Urgent'),
-
-                    _buildTaskCard(
-                      title: 'Data Structures Assignment 3',
-                      meta: 'CS Year 3 · Academic',
-                      dueBadge: 'Tomorrow',
-                      urgency: _Urgency.urgent,
-                    ),
-                    _buildSectionLabel('Up next'),
-
-                    _buildTaskCard(
-                      title: 'SE lecture moved',
-                      meta: '8am · Room B4',
-                      dueBadge: '2 days',
-                      urgency: _Urgency.soon,
-                    ),
-                    _buildTaskCard(
-                      title: 'Review chapter 2 notes',
-                      meta: 'Personal',
-                      dueBadge: 'Friday',
-                      urgency: _Urgency.later,
-                    ),
-                    _buildTaskCard(
-                      title: 'Cross Check IDCL Terms',
-                      meta: 'Personal ',
-                      dueBadge: 'Friday',
-                      urgency: _Urgency.later,
-                    ),
-                    _buildTaskCard(
-                      title: 'Pay School fees',
-                      meta: 'Academic ',
-                      dueBadge: 'Friday',
-                      urgency: _Urgency.urgent,
-                    ),
-                    const SizedBox(height: 12),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ),
-            // _buildNavBar(),
-          ],
-        ),
+        child: _isLoading
+            // brief spinner while shared_preferences reads from disk on first mount
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF4a4aaa)),
+              )
+            : _buildContent(),
       ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 63),
@@ -95,8 +131,138 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // header with greeting, name, and inline summary chips
-  Widget _buildHeader() {
+  // extracted so build() stays readable — contains the header + scrollable task list
+  Widget _buildContent() {
+    // loop through all tasks once and count by urgency bucket
+    // these counts drive the summary chips in the header
+    int urgentCount = 0;
+    int soonCount = 0;
+    int laterCount = 0;
+
+    for (final task in _tasks) {
+      final urgency = _parseUrgency(task['urgency'] as String?);
+      if (urgency == _Urgency.urgent) urgentCount++;
+      else if (urgency == _Urgency.soon) soonCount++;
+      else laterCount++;
+    }
+
+    return Column(
+      children: [
+        _buildHeader(urgentCount, soonCount, laterCount),
+        Expanded(
+          child: _tasks.isEmpty
+              ? _buildEmptyState()
+              : SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // each section only renders if it has tasks
+                      // if urgentCount is 0 the entire urgent block is skipped
+                      if (urgentCount > 0) ...[
+                        _buildSectionLabel('Urgent'),
+                        // filter _tasks to only urgent ones, then map each to a card
+                        ..._tasks
+                            .where((task) =>
+                                _parseUrgency(task['urgency'] as String?) ==
+                                _Urgency.urgent)
+                            .map((task) => _buildDismissibleCard(
+                                  taskId: task['id'] as String,
+                                  title: task['taskName'] as String? ?? '',
+                                  meta: task['dueDate'] as String? ?? '',
+                                  urgency: _Urgency.urgent,
+                                )),
+                      ],
+
+                      if (soonCount > 0) ...[
+                        _buildSectionLabel('Up next'),
+                        ..._tasks
+                            .where((task) =>
+                                _parseUrgency(task['urgency'] as String?) ==
+                                _Urgency.soon)
+                            .map((task) => _buildDismissibleCard(
+                                  taskId: task['id'] as String,
+                                  title: task['taskName'] as String? ?? '',
+                                  meta: task['dueDate'] as String? ?? '',
+                                  urgency: _Urgency.soon,
+                                )),
+                      ],
+
+                      if (laterCount > 0) ...[
+                        _buildSectionLabel('Later'),
+                        ..._tasks
+                            .where((task) =>
+                                _parseUrgency(task['urgency'] as String?) ==
+                                _Urgency.later)
+                            .map((task) => _buildDismissibleCard(
+                                  taskId: task['id'] as String,
+                                  title: task['taskName'] as String? ?? '',
+                                  meta: task['dueDate'] as String? ?? '',
+                                  urgency: _Urgency.later,
+                                )),
+                      ],
+
+                      const SizedBox(height: 80),
+                    ],
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  // wraps each task card in a Dismissible widget
+  // Dismissible is Flutter's built-in swipe-to-delete widget
+  // it handles partial swipe (reveals background), tap on background, and full swipe
+  // this gives us the iOS mail-style delete behaviour out of the box
+  Widget _buildDismissibleCard({
+    required String taskId,
+    required String title,
+    required String meta,
+    required _Urgency urgency,
+  }) {
+    return Dismissible(
+      // key must be unique per item — the local task id is perfect for this
+      // Flutter uses the key to track which card is being dismissed
+      key: Key(taskId),
+
+      // only allow swipe from right to left — matches iOS convention
+      direction: DismissDirection.endToStart,
+
+      // background is what slides in behind the card as you swipe
+      // only secondaryBackground is needed since direction is endToStart
+      background: Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF8a1a1a),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline, color: Color(0xFFe8e8f4), size: 20),
+      ),
+
+      // confirmDismiss is called when the user lifts their finger
+      // returning true completes the dismissal, false snaps the card back
+      confirmDismiss: (direction) async {
+        // delete from local storage — instant, no network
+        await _deleteTask(taskId);
+        return true;
+      },
+
+      // onDismissed runs after the card finishes sliding off screen
+      // the actual delete already happened in confirmDismiss
+      // this is just where you'd add a snackbar or undo option if needed
+      onDismissed: (direction) {},
+
+      child: _buildTaskCard(
+        title: title,
+        meta: meta,
+        urgency: urgency,
+      ),
+    );
+  }
+
+  Widget _buildHeader(int urgentCount, int soonCount, int laterCount) {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
       decoration: const BoxDecoration(
@@ -105,9 +271,12 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Good Morning,',
-            style: TextStyle(
+          // widget.name accesses the parent StatefulWidget's field
+          // in a StatelessWidget you'd write 'name' directly
+          // in a StatefulWidget state class you go through widget.
+          Text(
+            'Good morning, ${widget.name}',
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w500,
               color: _textPrimary,
@@ -116,11 +285,11 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 7),
           Row(
             children: [
-              _buildSummaryChip('1 urgent', _urgentText, _urgentBg),
+              _buildSummaryChip('$urgentCount urgent', _urgentText, _urgentBg),
               const SizedBox(width: 8),
-              _buildSummaryChip('3 soon', _soonText, _soonBg),
+              _buildSummaryChip('$soonCount soon', _soonText, _soonBg),
               const SizedBox(width: 8),
-              _buildSummaryChip('5 later', _laterText, _laterBg),
+              _buildSummaryChip('$laterCount later', _laterText, _laterBg),
             ],
           ),
         ],
@@ -153,10 +322,28 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Text(
+            'No tasks yet',
+            style: TextStyle(fontSize: 13, color: Color(0xFF6b6b9a)),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'Tap + to add one',
+            style: TextStyle(fontSize: 11, color: Color(0xFF4a4a6a)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTaskCard({
     required String title,
     required String meta,
-    required String dueBadge,
     required _Urgency urgency,
   }) {
     final borderColor = switch (urgency) {
@@ -165,7 +352,9 @@ class HomeScreen extends StatelessWidget {
       _Urgency.later  => const Color(0xFF3d8fa1),
     };
 
-    final cardBg = urgency == _Urgency.urgent ? const Color(0xFF231a1a) : _surface;
+    final cardBg = urgency == _Urgency.urgent
+        ? const Color(0xFF231a1a)
+        : _surface;
 
     final badgeText = urgency == _Urgency.urgent
         ? const Color(0xFFd87a5a)
@@ -176,7 +365,7 @@ class HomeScreen extends StatelessWidget {
     final badgeBg = urgency == _Urgency.urgent
         ? const Color(0xFF3a1a1a)
         : urgency == _Urgency.soon
-            ? const Color(0xFF3a1a1a)
+            ? const Color(0xFF2a2a5a)
             : const Color(0xFF1a3a42);
 
     return Container(
@@ -209,9 +398,14 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
+                    // meta is the due date string the user typed
+                    // shown as the secondary line below the task title
                     Text(
                       meta,
-                      style: const TextStyle(fontSize: 10.5, color: _textSecondary),
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        color: _textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -223,7 +417,11 @@ class HomeScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  dueBadge,
+                  urgency == _Urgency.urgent
+                      ? 'Urgent'
+                      : urgency == _Urgency.soon
+                          ? 'Soon'
+                          : 'Later',
                   style: TextStyle(fontSize: 9.5, color: badgeText),
                 ),
               ),
@@ -234,17 +432,21 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // add task button / FAB (floating action button)
   Widget _buildFab(BuildContext context) {
     return FloatingActionButton(
-      onPressed: () {
-        showModalBottomSheet(
+      onPressed: () async {
+        // await the sheet — _UploadSheet returns the new task map on success
+        // or null if the user dismissed without saving
+        final newTask = await showModalBottomSheet<Map<String, dynamic>>(
           context: context,
-          // isScrollControlled lets the sheet grow taller than half the screen
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (context) => const _UploadSheet(),
         );
+        // if a task came back, add it to the local list
+        if (newTask != null) {
+          await _addTask(newTask);
+        }
       },
       backgroundColor: _accent,
       foregroundColor: _textPrimary,
@@ -253,35 +455,13 @@ class HomeScreen extends StatelessWidget {
       child: const Icon(Icons.add, size: 28),
     );
   }
-
-  Widget _buildNavItem(String label, {bool isActive = false}) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 18,
-          height: 18,
-          decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF3a3a7a) : const Color(0xFF2d2d4a),
-            borderRadius: BorderRadius.circular(5),
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 9,
-            color: isActive ? const Color(0xFF7b7bcc) : _textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 
-// upload sheet — handles both personal task creation and rep broadcasts
-// StatefulWidget because it manages tab state and form field values
+// ── Upload Sheet ──────────────────────────────────────────────────────────────
+// handles both personal task creation (local) and rep broadcasts (Firestore)
+// StatefulWidget because it owns tab state, form field values,
+// and a loading flag that prevents duplicate submissions
 class _UploadSheet extends StatefulWidget {
   const _UploadSheet();
 
@@ -301,7 +481,14 @@ class _UploadSheetState extends State<_UploadSheet> {
   static const _colorSoon = Color(0xFF5c5cd6);
   static const _colorLater = Color(0xFF3d8fa1);
 
+  // tracks which tab is active — 0 = Personal, 1 = Broadcast
   int _activeTab = 0;
+
+  // true while a Firestore write is in progress (broadcast tab only)
+  // used to block the submit button so the user can't tap multiple times
+  // and create duplicate broadcasts while the first write is still running
+  // personal tab writes are synchronous to disk — no loading state needed
+  bool _isSubmitting = false;
 
   final _taskNameController = TextEditingController();
   final _taskDueDateController = TextEditingController();
@@ -316,6 +503,8 @@ class _UploadSheetState extends State<_UploadSheet> {
 
   @override
   void dispose() {
+    // always dispose controllers when the widget is removed from the tree
+    // failure to do this leaks memory — the controllers stay alive in the background
     _taskNameController.dispose();
     _taskDueDateController.dispose();
     _titleController.dispose();
@@ -327,6 +516,9 @@ class _UploadSheetState extends State<_UploadSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // viewInsets.bottom is the height of the on-screen keyboard
+    // adding it to the bottom padding pushes the sheet up when the keyboard appears
+    // so the fields are never hidden behind the keyboard
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
@@ -339,7 +531,7 @@ class _UploadSheetState extends State<_UploadSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // drag handle
+          // drag handle — visual affordance that the sheet is draggable
           Center(
             child: Container(
               width: 32,
@@ -394,6 +586,8 @@ class _UploadSheetState extends State<_UploadSheet> {
       child: GestureDetector(
         onTap: () => setState(() {
           _activeTab = index;
+          // reset urgency selection when switching tabs
+          // so the previous tab's selection doesn't carry over
           _selectedUrgency = null;
         }),
         child: Container(
@@ -421,7 +615,11 @@ class _UploadSheetState extends State<_UploadSheet> {
       children: [
         _buildField('Task name', _taskNameController),
         const SizedBox(height: 10),
-        _buildField('Due date', _taskDueDateController, hint: 'e.g. Friday, Dec 20'),
+        _buildField(
+          'Due date',
+          _taskDueDateController,
+          hint: 'e.g. Friday, Dec 20',
+        ),
       ],
     );
   }
@@ -436,9 +634,13 @@ class _UploadSheetState extends State<_UploadSheet> {
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(child: _buildField('Source', _sourceController, hint: 'e.g. Mr. Musa · CS')),
+            Expanded(
+              child: _buildField('Source', _sourceController, hint: 'e.g. Mr. Musa · CS'),
+            ),
             const SizedBox(width: 8),
-            Expanded(child: _buildField('Due date', _broadcastDueDateController, hint: 'e.g. Friday')),
+            Expanded(
+              child: _buildField('Due date', _broadcastDueDateController, hint: 'e.g. Friday'),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -453,8 +655,12 @@ class _UploadSheetState extends State<_UploadSheet> {
     );
   }
 
-  Widget _buildField(String label, TextEditingController controller,
-      {String? hint, bool tall = false}) {
+  Widget _buildField(
+    String label,
+    TextEditingController controller, {
+    String? hint,
+    bool tall = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -472,9 +678,15 @@ class _UploadSheetState extends State<_UploadSheet> {
             style: const TextStyle(fontSize: 11, color: _textPrimary),
             decoration: InputDecoration(
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 9,
+              ),
               hintText: hint,
-              hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF4a4a6a)),
+              hintStyle: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF4a4a6a),
+              ),
             ),
           ),
         ),
@@ -485,7 +697,11 @@ class _UploadSheetState extends State<_UploadSheet> {
   Widget _buildLabel(String text) {
     return Text(
       text,
-      style: const TextStyle(fontSize: 10, color: _textMuted, letterSpacing: 0.3),
+      style: const TextStyle(
+        fontSize: 10,
+        color: _textMuted,
+        letterSpacing: 0.3,
+      ),
     );
   }
 
@@ -521,7 +737,7 @@ class _UploadSheetState extends State<_UploadSheet> {
   }
 
   Widget _buildCategoryChips() {
-    final options = ['Academic', 'Financial', 'Urgent'];
+    final options = ['Academic', 'Financial'];
     return Wrap(
       spacing: 6,
       children: options.map((option) {
@@ -595,19 +811,30 @@ class _UploadSheetState extends State<_UploadSheet> {
     );
   }
 
+  // submit button is visually disabled while _isSubmitting is true (broadcast tab only)
   Widget _buildSubmitButton() {
     final isPersonal = _activeTab == 0;
     return GestureDetector(
-      onTap: _handleSubmit,                         
+      // onTap is null when _isSubmitting is true — GestureDetector ignores null taps
+      onTap: _isSubmitting ? null : _handleSubmit,
       child: Container(
-        width: double.infinity,                      //span the full width of the parent
+        width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 11),
         decoration: BoxDecoration(
-          color: isPersonal ? const Color(0xFF3a6a4a) : _accent,
+          // slightly dimmed when submitting to signal the button is inactive
+          color: _isSubmitting
+              ? const Color(0xFF2a2a5a)
+              : isPersonal
+                  ? const Color(0xFF3a6a4a)
+                  : _accent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
-          isPersonal ? 'Add Task' : 'Broadcast',
+          _isSubmitting
+              ? 'Sending…'
+              : isPersonal
+                  ? 'Add Task'
+                  : 'Broadcast',
           textAlign: TextAlign.center,
           style: const TextStyle(
             fontSize: 12,
@@ -619,56 +846,67 @@ class _UploadSheetState extends State<_UploadSheet> {
     );
   }
 
-  //handle submit — moved inside the class so it can access all instance fields
-  Future<void> _handleSubmit() async {                
 
-    //grab the logged in user
-    final user = FirebaseAuth.instance.currentUser;
 
-    //Defensive Programming  ( if theres no user)
-    if (user == null) {
-      _showToast('Error: user not logged in', isError: true);
+  
+
+  Future<void> _handleSubmit() async {
+    // validation runs first for both tabs
+    if (_activeTab == 0) {
+      if (_taskNameController.text.trim().isEmpty) {
+        _showToast('Please enter a task name', isError: true);
+        return;
+      }
+    } else {
+      if (_titleController.text.trim().isEmpty) {
+        _showToast('Please enter a title', isError: true);
+        return;
+      }
+    }
+
+    if (_selectedUrgency == null) {
+      _showToast('Please select an urgency level', isError: true);
       return;
     }
 
-    //used to check for unknown exceptions
-    try {
-      if (_activeTab == 0) {
+    if (_activeTab == 0) {
+      // personal tab — write to local storage only, no network involved
+      // build the task map that will be stored and returned to HomeScreen
+      final newTask = {
+        // millisecondsSinceEpoch gives a unique integer timestamp as the local id
+        // toString() converts it to a string so it matches the Map<String, dynamic> type
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'taskName': _taskNameController.text.trim(),
+        'dueDate': _taskDueDateController.text.trim(),
+        'urgency': _selectedUrgency,
+        'category': 'Personal',
+      };
 
-        //validate personal tab then write to personal collection
-        if (_taskNameController.text.trim().isEmpty) {
-          _showToast('Please enter a task', isError: true); 
-          return;
-        }
-        if (_selectedUrgency == null) {
-          _showToast('Please select an urgency level', isError: true);
-          return;
-        }
+      _showToast('Task added');
 
-        await FirebaseFirestore.instance.collection('personal').add({
-          'taskName': _taskNameController.text.trim(),  
-          'dueDate': _taskDueDateController.text.trim(),
-          'urgency': _selectedUrgency,
-          'category': 'Personal',
-          'uid': user.uid,
-          'createdAt': FieldValue.serverTimestamp(),   
-        });
+      // dismiss the keyboard before closing
+      FocusScope.of(context).unfocus();
 
-        _showToast('Task added');
+      // Navigator.pop with a value passes the task map back to the FAB's await
+      // HomeScreen receives it in newTask and calls _addTask
+      if (mounted) Navigator.pop(context, newTask);
 
-      } else {
-        //broadcast tab, validate then write to firebase
+    } else {
+      // broadcast tab — still uses Firestore, network required
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _showToast('Error: user not logged in', isError: true);
+        return;
+      }
 
-        if (_titleController.text.trim().isEmpty) {
-          _showToast('Please enter a title', isError: true);
-          return;
-        }
+      // set _isSubmitting to true before the write starts
+      // this disables the button and shows 'Sending…' so the user knows something is happening
+      setState(() => _isSubmitting = true);
 
-        if (_selectedUrgency == null) {
-          _showToast('Please select an urgency level', isError: true);
-          return;
-        }
+      // dismiss the keyboard before closing the sheet
+      FocusScope.of(context).unfocus();
 
+      try {
         await FirebaseFirestore.instance.collection('broadcast').add({
           'title': _titleController.text.trim(),
           'body': _bodyController.text.trim(),
@@ -678,26 +916,33 @@ class _UploadSheetState extends State<_UploadSheet> {
           'category': _selectedCategory,
           'urgency': _selectedUrgency,
           'uid': user.uid,
+          // FieldValue.serverTimestamp() writes the server's current time
+          // more reliable than DateTime.now() which uses the device clock
           'createdAt': FieldValue.serverTimestamp(),
-        });                                            
+        });
+
         _showToast('Broadcast sent');
+
+        // close the sheet after a successful write
+        // mounted check ensures we don't call Navigator on a widget that no longer exists
+        if (mounted) Navigator.pop(context);
+
+      } catch (e) {
+
+        _showToast('Error: $e', isError: true);
+        // re-enable the button so the user can try again
+        if (mounted) setState(() => _isSubmitting = false);
       }
-
-      //close sheet after successful write
-      if (mounted) Navigator.pop(context);
-
-    } catch (e) {
-      _showToast('There was an error', isError: true);
     }
   }
 
-  void _showToast(String msg, {bool isError = false}) { 
+  void _showToast(String msg, {bool isError = false}) {
     Fluttertoast.showToast(
       msg: msg,
-      backgroundColor: isError ? const Color(0xFF8a3a3a) : const Color(0xFF4a4aaa),
+      backgroundColor:
+          isError ? const Color(0xFF8a3a3a) : const Color(0xFF4a4aaa),
       textColor: const Color(0xFFe8e8f4),
       toastLength: Toast.LENGTH_LONG,
     );
   }
-
-} 
+}
