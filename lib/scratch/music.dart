@@ -167,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _Urgency.urgent)
                             .map((task) => _buildDismissibleCard(
                                   taskId: task['id'] as String,
-                                  title: task['taskName'] as String? ?? '',
+                                  title: task['taskName'] as String? ?? '', //string coalescing if the string is null set it to empty string 
                                   meta: task['dueDate'] as String? ?? '',
                                   urgency: _Urgency.urgent,
                                 )),
@@ -216,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // this gives us the iOS mail-style delete behaviour out of the box
   Widget _buildDismissibleCard({
     required String taskId,
-    required String title,
+    required String title, 
     required String meta,
     required _Urgency urgency,
   }) {
@@ -458,10 +458,18 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 
-// ── Upload Sheet ──────────────────────────────────────────────────────────────
-// handles both personal task creation (local) and rep broadcasts (Firestore)
-// StatefulWidget because it owns tab state, form field values,
-// and a loading flag that prevents duplicate submissions
+
+
+
+
+
+
+
+
+
+
+
+
 class _UploadSheet extends StatefulWidget {
   const _UploadSheet();
 
@@ -481,13 +489,9 @@ class _UploadSheetState extends State<_UploadSheet> {
   static const _colorSoon = Color(0xFF5c5cd6);
   static const _colorLater = Color(0xFF3d8fa1);
 
-  // tracks which tab is active — 0 = Personal, 1 = Broadcast
+
   int _activeTab = 0;
 
-  // true while a Firestore write is in progress (broadcast tab only)
-  // used to block the submit button so the user can't tap multiple times
-  // and create duplicate broadcasts while the first write is still running
-  // personal tab writes are synchronous to disk — no loading state needed
   bool _isSubmitting = false;
 
   final _taskNameController = TextEditingController();
@@ -511,7 +515,7 @@ class _UploadSheetState extends State<_UploadSheet> {
     _bodyController.dispose();
     _sourceController.dispose();
     _broadcastDueDateController.dispose();
-    super.dispose();
+    super.dispose(); //clear out the widget state
   }
 
   @override
@@ -519,7 +523,7 @@ class _UploadSheetState extends State<_UploadSheet> {
     // viewInsets.bottom is the height of the on-screen keyboard
     // adding it to the bottom padding pushes the sheet up when the keyboard appears
     // so the fields are never hidden behind the keyboard
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom; // how You tall the keyboard is
 
     return Container(
       decoration: const BoxDecoration(
@@ -527,7 +531,7 @@ class _UploadSheetState extends State<_UploadSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.fromLTRB(18, 16, 18, 24 + bottomInset),
-      child: Column(
+      child: Column( 
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -709,10 +713,11 @@ class _UploadSheetState extends State<_UploadSheet> {
     final options = ['CS Year 3', 'SE Year 3', 'All dept.'];
     return Wrap(
       spacing: 6,
-      children: options.map((option) {
+      children: options.map((options) {
         final isSelected = _selectedAudience == option;
         return GestureDetector(
           onTap: () => setState(() => _selectedAudience = option),
+          
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
@@ -736,12 +741,17 @@ class _UploadSheetState extends State<_UploadSheet> {
     );
   }
 
+
+
+ 
+
   Widget _buildCategoryChips() {
     final options = ['Academic', 'Financial'];
     return Wrap(
       spacing: 6,
       children: options.map((option) {
         final isSelected = _selectedCategory == option;
+
         return GestureDetector(
           onTap: () => setState(() => _selectedCategory = option),
           child: Container(
@@ -751,14 +761,14 @@ class _UploadSheetState extends State<_UploadSheet> {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: isSelected ? _accent : const Color(0xFF3a3a6a),
-                width: 0.5,
+                width: 0.6,
               ),
             ),
             child: Text(
               option,
               style: TextStyle(
                 fontSize: 10,
-                color: isSelected ? const Color(0xFFa0a0ee) : _textMuted,
+                color: isSelected ? const Color(0xFFa0a0ee) : _textPrimary,
               ),
             ),
           ),
@@ -775,6 +785,7 @@ class _UploadSheetState extends State<_UploadSheet> {
         const SizedBox(height: 6),
         Row(
           children: [
+            //label, border color, bg color
             _buildUrgencyChip('Urgent', _colorUrgent, const Color(0xFF2a1a1a)),
             const SizedBox(width: 6),
             _buildUrgencyChip('Soon', _colorSoon, const Color(0xFF1e1e3a)),
@@ -793,6 +804,7 @@ class _UploadSheetState extends State<_UploadSheet> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
+          
           color: isSelected ? bgColor : _bg,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
@@ -852,6 +864,8 @@ class _UploadSheetState extends State<_UploadSheet> {
 
   Future<void> _handleSubmit() async {
     // validation runs first for both tabs
+    //active tab == 0 is personal
+
     if (_activeTab == 0) {
       if (_taskNameController.text.trim().isEmpty) {
         _showToast('Please enter a task name', isError: true);
@@ -868,6 +882,8 @@ class _UploadSheetState extends State<_UploadSheet> {
       _showToast('Please select an urgency level', isError: true);
       return;
     }
+
+    //recheck tab to know if to use local or firestore writes
 
     if (_activeTab == 0) {
       // personal tab — write to local storage only, no network involved
@@ -945,4 +961,7 @@ class _UploadSheetState extends State<_UploadSheet> {
       toastLength: Toast.LENGTH_LONG,
     );
   }
+
+
+  
 }
