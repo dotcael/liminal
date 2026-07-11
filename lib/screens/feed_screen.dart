@@ -1,8 +1,10 @@
 // John 3:16-17
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-// stateful because the screen reacts to filter chip taps
+
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
 
@@ -11,7 +13,7 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  // ── color system ─────────────────────────────────────────────────────────────
+
   static const _bg = Color(0xFF1a1a2e);
   static const _surface = Color(0xFF22223a);
   static const _border = Color(0xFF2d2d4a);
@@ -22,106 +24,127 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // category accent colors — left border + timeline dot
   static const _colorAcademic = Color(0xFF5c5cd6);
-  static const _colorPersonal = Color(0xFF4a9a60);
+  // static const _colorPersonal = Color(0xFF4a9a60);
   static const _colorFinancial = Color(0xFFc49040);
-  // urgent is now a flag, not a category — but we still need a color for it
+  // urgent is a flag, not a category — but it still needs its own color
   static const _colorUrgent = Color(0xFFd85a30);
 
   // badge background / text pairs per category
   static const _badgeBgAcademic = Color(0xFF2a2a5a);
   static const _badgeTxtAcademic = Color(0xFF8888dd);
-  static const _badgeBgPersonal = Color(0xFF1a3a28);
-  static const _badgeTxtPersonal = Color(0xFF5abba0);
+  // static const _badgeBgPersonal = Color(0xFF1a3a28);
+  // static const _badgeTxtPersonal = Color(0xFF5abba0);
   static const _badgeBgFinancial = Color(0xFF3a2a10);
   static const _badgeTxtFinancial = Color(0xFFc49040);
-  // urgent badge colors — used when isUrgent is true, regardless of category
+  // urgent badge colors — used whenever isUrgent is true, regardless of category
   static const _badgeBgUrgent = Color(0xFF3a1a1a);
   static const _badgeTxtUrgent = Color(0xFFd87a5a);
+
+  // action button colors (kept as named constants even though only one
+  // variant — primary — is currently used, so nothing below needs raw hex)
+  static const _actionPrimaryBg = Color(0xFF3a3a7a);
+  static const _actionPrimaryBorder = Color(0xFF5c5cd6);
+  static const _actionPrimaryText = Color(0xFFa0a0ee);
 
   // the currently selected filter chip — defaults to showing everything
   _FeedFilter _activeFilter = _FeedFilter.all;
 
-  // ── feed data ─────────────────────────────────────────────────────────────────
-  // in the real app this will come from Firestore — hardcoded for the prototype
-  final List<_FeedItem> _items = const [
-    _FeedItem(
-      // academic category + isUrgent: true — deadline announcement
-      category: _FeedCategory.academic,
-      isUrgent: true,
-      source: 'Mr. Musa · CS Dept',
-      title: 'Class and Quiz update',
-      body: 'Class on Monday starts at 8:30,followed by quiz test at 8:50am. Lateness will NOT be tolerated',
-      due: '2 days left',
-      dueIsHot: true,
-      time: '8:02am',
-      isUnread: true,
-      dateGroup: 'Today',
-    ),
-    _FeedItem(
-      // academic, not urgent — just a venue change
-      category: _FeedCategory.academic,
-      isUrgent: false,
-      source: 'SE · Year 3',
-      title: 'Lecture rescheduled — Room B4, 8am tomorrow',
-      body: 'Venue change only. Topic remains Design Patterns ch. 4.',
-      due: 'Tomorrow',
-      dueIsHot: false,
-      time: '7:45am',
-      isUnread: true,
-      dateGroup: 'Today',
-      actions: ['Add to calendar', 'Dismiss'],
-    ),
-    _FeedItem(
-      // financial category + isUrgent: true — overdue fees
-      category: _FeedCategory.financial,
-      isUrgent: true,
-      source: 'Finance Office',
-      title: 'Semester 2 fees — balance outstanding',
-      // 'r' prefix = raw string, tells Dart to treat $ as a literal symbol
-      body: r'$420 due before the 30th to avoid a late fee.',
-      due: '10 days',
-      dueIsHot: true,
-      time: '6:30am',
-      isUnread: true,
-      dateGroup: 'Today',
-      actions: ['View statement', 'Snooze'],
-    ),
-    _FeedItem(
-      // personal, not urgent — self-added reminder
-      category: _FeedCategory.personal,
-      isUrgent: false,
-      source: 'Personal',
-      title: 'Review chapter 2 notes',
-      body: 'You added this task 3 days ago. No progress logged yet.',
-      due: 'Friday',
-      dueIsHot: false,
-      time: '9:00pm',
-      isUnread: false,
-      dateGroup: 'Yesterday',
-    ),
-    _FeedItem(
-      // academic, urgent — overdue library book
-      category: _FeedCategory.academic,
-      isUrgent: true,
-      source: 'Library · Resource Notice',
-      title: 'Borrowed book overdue — Algorithms Unlocked',
-      body: 'Return or renew by end of week. Fines apply after 7 days.',
-      due: 'Overdue',
-      dueIsHot: true,
-      time: '2:10pm',
-      isUnread: false,
-      dateGroup: 'Yesterday',
-    ),
-  ];
+  // ── Firestore ─────────────────────────────────────────────────────────────────
+  // the broadcast collection, ordered newest-first — same collection
+  // _UploadSheet writes to from the home screen's broadcast tab.
+  // declared once as a Stream so StreamBuilder doesn't recreate the query
+  // (and therefore re-subscribe) on every rebuild
+  final Stream<QuerySnapshot> _broadcastStream = FirebaseFirestore.instance
+      .collection('broadcast')
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+
+  // ── mapping helpers: Firestore doc → _FeedItem ───────────────────────────────
+
+  // converts the 'urgency' string field ('Urgent' / 'Soon' / 'Later') into the
+  // isUrgent boolean this screen actually displays with. anything that isn't
+  // exactly 'Urgent' is treated as not urgent
+  bool _parseIsUrgent(String? value) => value == 'Urgent';
+
+  // converts the 'category' string field into the _FeedCategory enum.
+  // defaults to academic if the field is missing or doesn't match —
+  // broadcasts are only ever tagged Academic or Financial from the upload
+  // sheet's category chips, but this keeps the mapping safe either way
+  _FeedCategory _parseCategory(String? value) {
+    switch (value) {
+      case 'Financial':
+        return _FeedCategory.financial;
+      // case 'Personal':
+      //   return _FeedCategory.personal;
+      default:
+        return _FeedCategory.academic;
+    }
+  }
+
+  // groups a createdAt DateTime into 'Today', 'Yesterday', or a short date
+  // label for anything older. comparing year/month/day directly (not just
+  // subtracting durations) avoids the classic bug where "23 hours ago" is
+  // wrongly called Today or Yesterday depending on the time of day
+  String _dateGroupLabel(DateTime createdAt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final itemDay = DateTime(createdAt.year, createdAt.month, createdAt.day);
+    final difference = today.difference(itemDay).inDays;
+
+    if (difference == 0) return 'Today';
+    if (difference == 1) return 'Yesterday';
+    // intl's DateFormat — already a project dependency — handles the rest
+    return DateFormat('EEE, MMM d').format(createdAt);
+  }
+
+  // formats the time-of-day shown in the top-right of each card, e.g. '8:02am'
+  // DateFormat gives 'AM'/'PM' in caps, so it's lowercased to match the
+  // original mockup's style
+  String _formatTime(DateTime createdAt) {
+    return DateFormat('h:mma').format(createdAt).toLowerCase();
+  }
+
+  // converts a single Firestore document into the _FeedItem this screen
+  // already knows how to render — keeps all the Firestore-specific field
+  // names contained to this one function
+  _FeedItem _itemFromDoc(QueryDocumentSnapshot doc) {
+    // cast the doc data to a Map so individual fields can be read by key
+    final data = doc.data() as Map<String, dynamic>;
+
+    // createdAt is a Firestore Timestamp object, not a DateTime — toDate()
+    // converts it. it can briefly be null right after a write, before the
+    // server timestamp round-trips back down, so fall back to now() then
+    final Timestamp? timestamp = data['createdAt'] as Timestamp?;
+    final createdAt = timestamp?.toDate() ?? DateTime.now();
+
+    return _FeedItem(
+      // doc.id is the Firestore-generated document id — used as the
+      // ListView/Dismissible key equivalent if this screen ever needs one
+      id: doc.id,
+      category: _parseCategory(data['category'] as String?),
+      isUrgent: _parseIsUrgent(data['urgency'] as String?),
+      source: data['source'] as String? ?? '',
+      title: data['title'] as String? ?? '',
+      body: data['body'] as String? ?? '',
+      due: data['dueDate'] as String? ?? '',
+      // the due date badge turns the urgent color whenever the post itself
+      // is urgent — there's no separate "hot" flag stored in Firestore
+      dueIsHot: _parseIsUrgent(data['urgency'] as String?),
+      time: _formatTime(createdAt),
+      dateGroup: _dateGroupLabel(createdAt),
+    );
+  }
 
   // ── computed properties ───────────────────────────────────────────────────────
 
-  // filters _items based on which chip is active
-  List<_FeedItem> get _visibleItems {
+  // filters a list of items based on which chip is active.
+  // takes the list in as a parameter (rather than reading a field) because
+  // the source list now comes from the StreamBuilder snapshot each rebuild,
+  // not from a stored _items field
+  List<_FeedItem> _visibleItems(List<_FeedItem> items) {
+    if (_activeFilter == _FeedFilter.all) return items;
 
-    if (_activeFilter == _FeedFilter.all) return _items;
-    
-    return _items.where((item) {
+    return items.where((item) {
       switch (_activeFilter) {
         case _FeedFilter.urgent:
           // urgent filter shows any item flagged as urgent, across all categories
@@ -130,33 +153,35 @@ class _FeedScreenState extends State<FeedScreen> {
         case _FeedFilter.academic:
           return item.category == _FeedCategory.academic;
 
-        case _FeedFilter.personal:
-          return item.category == _FeedCategory.personal;
+        // case _FeedFilter.personal:
+        //   return item.category == _FeedCategory.personal;
 
         case _FeedFilter.financial:
           return item.category == _FeedCategory.financial;
 
-          //safeguard incase the case reaches here
+        // safeguard in case the switch reaches here
         case _FeedFilter.all:
           return true;
       }
     }).toList();
   }
 
-  // pulls unique date group labels in the order they appear — keeps sections sorted
-  List<String> get _dateGroups {
-    //empty  box
+  // pulls unique date group labels in the order they appear — keeps sections
+  // sorted the same way the underlying (already newest-first) query is sorted
+  List<String> _dateGroups(List<_FeedItem> items) {
     final seen = <String>{};
-    //groups list
     final groups = <String>[];
-    for (final item in _visibleItems) {
+    for (final item in items) {
       if (seen.add(item.dateGroup)) groups.add(item.dateGroup);
     }
     return groups;
   }
 
-  // counts how many items are still unread for the header badge
-  int get _unreadCount => _items.where((i) => i.isUnread).length;
+  // counts how many items are unread for the header badge.
+  // NOTE: there's no read/unread tracking wired to Firestore yet — every
+  // broadcast is currently treated as unread. revisit once a per-user
+  // "read receipts" field or local read-state cache is added
+  int _unreadCount(List<_FeedItem> items) => items.length;
 
   // ── build ─────────────────────────────────────────────────────────────────────
   @override
@@ -164,24 +189,59 @@ class _FeedScreenState extends State<FeedScreen> {
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              // if the active filter returns nothing, show the empty state
-              child: _visibleItems.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTimeline(),
-            ),
-            // _buildNavBar(),
-          ],
+        // StreamBuilder rebuilds automatically every time the 'broadcast'
+        // collection changes — no manual refresh button or polling needed
+        child: StreamBuilder<QuerySnapshot>(
+          stream: _broadcastStream,
+          builder: (context, snapshot) {
+            // still waiting on the very first snapshot — show a spinner
+            // instead of a flash of the empty state
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(color: _accent),
+              );
+            }
+
+            // something went wrong talking to Firestore (offline, rules
+            // rejection, etc.) — surface it instead of pretending it's empty
+            if (snapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Couldn\'t load the feed',
+                  style: const TextStyle(fontSize: 13, color: _textMuted),
+                ),
+              );
+            }
+
+            // snapshot.data!.docs is the live list of broadcast documents —
+            // map each one into the _FeedItem shape the rest of this screen
+            // already knows how to render
+            final docs = snapshot.data?.docs ?? [];
+            final items = docs.map(_itemFromDoc).toList();
+            final visible = _visibleItems(items);
+
+            return Column(
+              children: [
+                _buildHeader(items),
+                Expanded(
+                  // if the active filter returns nothing, show the empty state
+                  child: visible.isEmpty
+                      ? _buildEmptyState()
+                      : _buildTimeline(visible),
+                ),
+                // _buildNavBar(),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
   // ── header ────────────────────────────────────────────────────────────────────
-  Widget _buildHeader() {
+  // takes the full (unfiltered) item list so the unread badge always reflects
+  // every broadcast, not just whatever the current filter chip shows
+  Widget _buildHeader(List<_FeedItem> allItems) {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
       decoration: const BoxDecoration(
@@ -201,7 +261,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               ),
               // unread badge — only shown when there are unread items
-              if (_unreadCount > 0) ...[
+              if (_unreadCount(allItems) > 0) ...[
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -210,7 +270,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    '$_unreadCount new',
+                    '${_unreadCount(allItems)} new',
                     style: const TextStyle(fontSize: 9, color: _badgeTxtAcademic),
                   ),
                 ),
@@ -222,11 +282,10 @@ class _FeedScreenState extends State<FeedScreen> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              //make a filter chip for all enum values [all,personal,financial,accademic] etc
-
-              children: _FeedFilter.values
-                  .map((f) => _buildFilterChip(f))
-                  .toList(),
+              // makes a filter chip for every enum value (all, urgent,
+              // academic, personal, financial) — adding a new filter later
+              // only means adding it to the enum, not touching this Row
+              children: _FeedFilter.values.map((f) => _buildFilterChip(f)).toList(),
             ),
           ),
           const SizedBox(height: 1),
@@ -237,11 +296,10 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── filter chip ───────────────────────────────────────────────────────────────
   Widget _buildFilterChip(_FeedFilter filter) {
-    final isActive = _activeFilter
-     == filter;
+    final isActive = _activeFilter == filter;
     return GestureDetector(
-    
-      // setState triggers a rebuild — _visibleItems recomputes with the new filter
+      // setState triggers a rebuild — _visibleItems recomputes with the new
+      // filter against whatever the StreamBuilder's latest snapshot is
       onTap: () => setState(() => _activeFilter = filter),
       child: Container(
         margin: const EdgeInsets.only(right: 6, bottom: 10),
@@ -266,13 +324,14 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   // ── timeline ──────────────────────────────────────────────────────────────────
-  Widget _buildTimeline() {
+  Widget _buildTimeline(List<_FeedItem> items) {
+    final groups = _dateGroups(items);
     return ListView(
       padding: const EdgeInsets.only(top: 10, bottom: 16),
       children: [
-        for (final group in _dateGroups) ...[
+        for (final group in groups) ...[
           _buildDateLabel(group),
-          ..._buildGroupItems(group),
+          ..._buildGroupItems(items, groups, group),
         ],
       ],
     );
@@ -292,22 +351,29 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  List<Widget> _buildGroupItems(String group) {
-    final groupItems = _visibleItems.where((i) => i.dateGroup == group).toList();
+  // builds the timeline rows for a single date group.
+  // groups is passed in (rather than recomputed) so "is this the very last
+  // row in the whole list" can be checked without rebuilding the group list
+  // for every single group while looping
+  List<Widget> _buildGroupItems(
+    List<_FeedItem> items,
+    List<String> groups,
+    String group,
+  ) {
+    final groupItems = items.where((i) => i.dateGroup == group).toList();
 
     return List.generate(groupItems.length, (index) {
       final item = groupItems[index];
-      // the last item in the entire list gets no connector line below it
-      final isLast = group == _dateGroups.last && index == groupItems.length - 1;
+      // the very last item across all groups gets no connector line below it
+      final isLast = group == groups.last && index == groupItems.length - 1;
       return _buildTimelineRow(item, drawLine: !isLast);
-    });       
+    });
   }
 
   // ── timeline row ──────────────────────────────────────────────────────────────
   Widget _buildTimelineRow(_FeedItem item, {required bool drawLine}) {
-    // if the item is urgent, the dot uses the urgent color regardless of category 
-    //else use the default category color nlue for academic, green for personal and yellow for personal
-
+    // if the item is urgent, the dot uses the urgent color regardless of
+    // category — otherwise it falls back to that category's own color
     final dotColor = item.isUrgent ? _colorUrgent : _categoryAccentColor(item.category);
 
     return IntrinsicHeight(
@@ -409,7 +475,7 @@ class _FeedScreenState extends State<FeedScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // badge shows the real category, not urgency
+                // badge shows the real category, plus an urgent tag if needed
                 _buildBadge(item),
                 Text(
                   item.due,
@@ -420,18 +486,6 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               ],
             ),
-            if (item.actions.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: item.actions.map((label) {
-                  final isPrimary = item.actions.indexOf(label) == 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _buildActionButton(label, isPrimary: isPrimary),
-                  );
-                }).toList(),
-              ),
-            ],
           ],
         ),
       ),
@@ -440,8 +494,8 @@ class _FeedScreenState extends State<FeedScreen> {
 
   // ── badge ─────────────────────────────────────────────────────────────────────
   Widget _buildBadge(_FeedItem item) {
-    // if the item is urgent, show an 'Urgent' badge on top of the category badge
-    // this makes both the category and urgency visible at a glance
+    // if the item is urgent, show an 'Urgent' badge alongside the category
+    // badge — this makes both the category and urgency visible at a glance
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -476,14 +530,18 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   // ── action button ─────────────────────────────────────────────────────────────
+  // kept as a standalone helper for now — not currently called from _buildCard
+  // since the feed has no real "Add to calendar" / "Dismiss" backend behavior
+  // wired up yet. left here, with named color constants, so it's ready to be
+  // reattached once those actions actually do something
   Widget _buildActionButton(String label, {required bool isPrimary}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: isPrimary ? const Color(0xFF3a3a7a) : _bg,
+        color: isPrimary ? _actionPrimaryBg : _bg,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: isPrimary ? const Color(0xFF5c5cd6) : _border,
+          color: isPrimary ? _actionPrimaryBorder : _border,
           width: 0.5,
         ),
       ),
@@ -491,7 +549,7 @@ class _FeedScreenState extends State<FeedScreen> {
         label,
         style: TextStyle(
           fontSize: 9,
-          color: isPrimary ? const Color(0xFFa0a0ee) : _textMuted,
+          color: isPrimary ? _actionPrimaryText : _textMuted,
         ),
       ),
     );
@@ -523,6 +581,8 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   // ── nav bar ───────────────────────────────────────────────────────────────────
+  // left commented out — nav wiring lives outside this file (ShellScreen),
+  // kept here only as a visual reference for matching styles
   // Widget _buildNavBar() {
   //   return Container(
   //     decoration: const BoxDecoration(
@@ -534,7 +594,7 @@ class _FeedScreenState extends State<FeedScreen> {
   //       children: [
   //         _buildNavItem('Home', isActive: false),
   //         _buildNavItem('Feed', isActive: true),
-  //         //_buildNavItem('Tasks', isActive: false),
+  //         _buildNavItem('Tasks', isActive: false),
   //         _buildNavItem('Profile', isActive: false),
   //       ],
   //     ),
@@ -565,28 +625,28 @@ class _FeedScreenState extends State<FeedScreen> {
   //   );
   // }
 
-  // ── helpers ───────────────────────────────────────────────────────────────────
+  // ── helpers: map category enum → colors / labels ─────────────────────────────
   Color _categoryAccentColor(_FeedCategory cat) => switch (cat) {
         _FeedCategory.academic => _colorAcademic,
-        _FeedCategory.personal => _colorPersonal,
+        // _FeedCategory.personal => _colorPersonal,
         _FeedCategory.financial => _colorFinancial,
       };
 
   Color _categoryBadgeBg(_FeedCategory cat) => switch (cat) {
         _FeedCategory.academic => _badgeBgAcademic,
-        _FeedCategory.personal => _badgeBgPersonal,
+        // _FeedCategory.personal => _badgeBgPersonal,
         _FeedCategory.financial => _badgeBgFinancial,
       };
 
   Color _categoryBadgeText(_FeedCategory cat) => switch (cat) {
         _FeedCategory.academic => _badgeTxtAcademic,
-        _FeedCategory.personal => _badgeTxtPersonal,
+        // _FeedCategory.personal => _badgeTxtPersonal,
         _FeedCategory.financial => _badgeTxtFinancial,
       };
 
   String _categoryLabel(_FeedCategory cat) => switch (cat) {
         _FeedCategory.academic => 'Academic',
-        _FeedCategory.personal => 'Personal',
+        // _FeedCategory.personal => 'Personal',
         _FeedCategory.financial => 'Financial',
       };
 }
@@ -596,27 +656,28 @@ enum _FeedFilter {
   all,
   urgent,
   academic,
-  personal,
+  // personal,
   financial;
 
   String get label => switch (this) {
         _FeedFilter.all => 'All',
         _FeedFilter.urgent => 'Urgent',
         _FeedFilter.academic => 'Academic',
-        _FeedFilter.personal => 'Personal',
+        // _FeedFilter.personal => 'Personal',
         _FeedFilter.financial => 'Financial',
       };
 }
 
-// urgent is no longer a category — it's removed from _FeedCategory
-enum _FeedCategory { academic, personal, financial }
+// urgent is not a category — it's a standalone flag on _FeedItem
+enum _FeedCategory { academic, financial }
 
 // ── data model ────────────────────────────────────────────────────────────────
 class _FeedItem {
+  // the Firestore document id — kept around in case a future iteration adds
+  // per-item actions (mark read, delete) that need to target a specific doc
+  final String id;
   final _FeedCategory category;
-
-  
-  // isUrgent is now a standalone boolean flag — any category can be urgent
+  // isUrgent is a standalone boolean flag — any category can be urgent
   final bool isUrgent;
   final String source;
   final String title;
@@ -624,11 +685,10 @@ class _FeedItem {
   final String due;
   final bool dueIsHot;
   final String time;
-  final bool isUnread;
   final String dateGroup;
-  final List<String> actions;
 
   const _FeedItem({
+    required this.id,
     required this.category,
     // isUrgent defaults to false — most items are not urgent
     this.isUrgent = false,
@@ -638,8 +698,6 @@ class _FeedItem {
     required this.due,
     required this.dueIsHot,
     required this.time,
-    required this.isUnread,
     required this.dateGroup,
-    this.actions = const [],
   });
 }

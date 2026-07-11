@@ -34,7 +34,7 @@ class _ShellScreenState extends State<ShellScreen> {
         children: [
           HomeScreen(name: widget.name, role: widget.role),
           const FeedScreen(),
-          const ProfileScreen(),
+          ProfileScreen(name: widget.name, role: widget.role),
         ],
       ),
       bottomNavigationBar: _buildNavBar(),
