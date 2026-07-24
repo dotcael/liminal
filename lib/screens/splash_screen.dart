@@ -4,6 +4,8 @@ import 'auth_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'shell_screen.dart';
+import '../dev/dev_prefs.dart';
+import '../dev/dev_log.dart';
 
 
 class SplashScreen extends StatefulWidget {
@@ -21,6 +23,9 @@ void initState() {
 }
 Future<void> _checkAuthAndNavigate() async {
   await Future.delayed(const Duration(seconds: 3));
+
+  await DevPrefs.load();
+  await DevLog.load();
 
   final user = FirebaseAuth.instance.currentUser;
 
@@ -77,25 +82,9 @@ Future<void> _checkAuthAndNavigate() async {
               ),
             ),
           ),
-          // Ring 2
-          Positioned(
-            top: MediaQuery.of(context).size.height * 0.20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                width: 250,
-                height: 347,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF2d2d4a),
-                    width: 0.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // BUG FIX: removed duplicate oval ring (250x347) that was labelled Ring 2 —
+          // it overlapped the actual circle ring below and was visibly wrong since
+          // BoxShape.circle was used on a non-square container
           // Ring 2
           Positioned(
             top: MediaQuery.of(context).size.height * 0.20,

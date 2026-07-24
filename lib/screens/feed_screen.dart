@@ -1,8 +1,10 @@
 // John 3:16-17
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../dev/dev_prefs.dart';
 
 
 class FeedScreen extends StatefulWidget {
@@ -12,15 +14,17 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
+// BUG FIX: replaced main ui colors with theme getters for light/dark toggle
+// category + badge colors stay mostly const since they're semantic brand colors
 class _FeedScreenState extends State<FeedScreen> {
 
-  static const _bg = Color(0xFF1a1a2e);
-  static const _surface = Color(0xFF22223a);
-  static const _border = Color(0xFF2d2d4a);
-  static const _accent = Color(0xFF4a4aaa);
-  static const _textPrimary = Color(0xFFe8e8f4);
-  static const _textMuted = Color(0xFF6b6b9a);
-  static const _textDim = Color(0xFF4a4a6a);
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _surface => Theme.of(context).colorScheme.surfaceContainerHighest;
+  Color get _border => Theme.of(context).dividerColor;
+  Color get _accent => Theme.of(context).colorScheme.primary;
+  Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
+  Color get _textMuted => Theme.of(context).colorScheme.onSurfaceVariant;
+  Color get _textDim => Theme.of(context).colorScheme.outline;
 
   // category accent colors — left border + timeline dot
   static const _colorAcademic = Color(0xFF5c5cd6);
@@ -29,25 +33,68 @@ class _FeedScreenState extends State<FeedScreen> {
   // urgent is a flag, not a category — but it still needs its own color
   static const _colorUrgent = Color(0xFFd85a30);
 
-  // badge background / text pairs per category
-  static const _badgeBgAcademic = Color(0xFF2a2a5a);
+  // BUG FIX: badge backgrounds now adapt to brightness
+  Color get _badgeBgAcademic => Theme.of(context).brightness == Brightness.dark
+    ? const Color(0xFF2a2a5a) : const Color(0xFFe0e0f8);
   static const _badgeTxtAcademic = Color(0xFF8888dd);
   // static const _badgeBgPersonal = Color(0xFF1a3a28);
   // static const _badgeTxtPersonal = Color(0xFF5abba0);
-  static const _badgeBgFinancial = Color(0xFF3a2a10);
+  Color get _badgeBgFinancial => Theme.of(context).brightness == Brightness.dark
+    ? const Color(0xFF3a2a10) : const Color(0xFFf8f0d6);
   static const _badgeTxtFinancial = Color(0xFFc49040);
   // urgent badge colors — used whenever isUrgent is true, regardless of category
-  static const _badgeBgUrgent = Color(0xFF3a1a1a);
+  Color get _badgeBgUrgent => Theme.of(context).brightness == Brightness.dark
+    ? const Color(0xFF3a1a1a) : const Color(0xFFfce8e0);
   static const _badgeTxtUrgent = Color(0xFFd87a5a);
 
-  // action button colors (kept as named constants even though only one
-  // variant — primary — is currently used, so nothing below needs raw hex)
-  static const _actionPrimaryBg = Color(0xFF3a3a7a);
-  static const _actionPrimaryBorder = Color(0xFF5c5cd6);
-  static const _actionPrimaryText = Color(0xFFa0a0ee);
+  // BUG FIX: action button also theme-aware
+  Color get _actionPrimaryBg => Theme.of(context).colorScheme.primaryContainer;
+  Color get _actionPrimaryBorder => Theme.of(context).colorScheme.primary;
+  Color get _actionPrimaryText => Theme.of(context).colorScheme.onPrimaryContainer;
 
   // the currently selected filter chip — defaults to showing everything
   _FeedFilter _activeFilter = _FeedFilter.all;
+
+  // BUG FIX: audience filtering — track user's department so feed only shows
+  // broadcasts meant for their dept + 'All dept.' announcements
+  String? _userDepartment;
+  bool _isLoadingUser = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserDepartment();
+  }
+
+  // BUG FIX: force rebuild when theme changes so getters pick up new colors
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    setState(() {});
+  }
+
+  // BUG FIX: fetch current user's department from Firestore for audience filter
+  Future<void> _loadUserDepartment() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isLoadingUser = false);
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (mounted) {
+        setState(() {
+          _userDepartment = doc.data()?['department'] as String?;
+          _isLoadingUser = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingUser = false);
+    }
+  }
 
   // ── Firestore ─────────────────────────────────────────────────────────────────
   // the broadcast collection, ordered newest-first — same collection
@@ -132,16 +179,29 @@ class _FeedScreenState extends State<FeedScreen> {
       dueIsHot: _parseIsUrgent(data['urgency'] as String?),
       time: _formatTime(createdAt),
       dateGroup: _dateGroupLabel(createdAt),
+      // BUG FIX: read audience from Firestore doc so feed can filter it
+      audience: data['audience'] as String? ?? '',
     );
   }
 
   // ── computed properties ───────────────────────────────────────────────────────
 
+  // BUG FIX: audience filter — if _userDepartment is known, only show broadcasts
+  // targeting that department or 'All dept.' so students dont see irrelevant announcements
+  //
   // filters a list of items based on which chip is active.
   // takes the list in as a parameter (rather than reading a field) because
   // the source list now comes from the StreamBuilder snapshot each rebuild,
   // not from a stored _items field
   List<_FeedItem> _visibleItems(List<_FeedItem> items) {
+    // first pass: audience filter — devs can bypass with toggle
+    final bypass = DevPrefs.bypassAudience;
+    if (!bypass && !_isLoadingUser && _userDepartment != null) {
+      items = items.where((item) {
+        return item.audience == _userDepartment || item.audience == 'All dept.';
+      }).toList();
+    }
+
     if (_activeFilter == _FeedFilter.all) return items;
 
     return items.where((item) {
@@ -197,18 +257,39 @@ class _FeedScreenState extends State<FeedScreen> {
             // still waiting on the very first snapshot — show a spinner
             // instead of a flash of the empty state
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
+              return Center(
                 child: CircularProgressIndicator(color: _accent),
               );
             }
 
+            // BUG FIX: show actual error message so dev can debug without guessing
             // something went wrong talking to Firestore (offline, rules
             // rejection, etc.) — surface it instead of pretending it's empty
             if (snapshot.hasError) {
+              final errMsg = snapshot.error.toString();
+              // BUG FIX: common dev-mode issue — auth bypassed but Firestore rules
+              // require auth. show a clearer message for that case
+              final displayMsg = errMsg.contains('permission-denied')
+                  ? 'Feed unavailable — log in required'
+                  : 'Couldn\'t load the feed';
               return Center(
-                child: Text(
-                  'Couldn\'t load the feed',
-                  style: const TextStyle(fontSize: 13, color: _textMuted),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      displayMsg,
+                      style: TextStyle(fontSize: 13, color: _textMuted),
+                    ),
+                    // BUG FIX: show the real error underneath for debugging
+                    const SizedBox(height: 6),
+                    Text(
+                      errMsg.length > 80
+                          ? '${errMsg.substring(0, 80)}…'
+                          : errMsg,
+                      style: TextStyle(fontSize: 9, color: _textDim),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               );
             }
@@ -244,7 +325,7 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget _buildHeader(List<_FeedItem> allItems) {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: _border, width: 0.5)),
       ),
       child: Column(
@@ -252,7 +333,7 @@ class _FeedScreenState extends State<FeedScreen> {
         children: [
           Row(
             children: [
-              const Text(
+              Text(
                 'Feed',
                 style: TextStyle(
                   fontSize: 20,
@@ -342,7 +423,7 @@ class _FeedScreenState extends State<FeedScreen> {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
       child: Text(
         label.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 9,
           color: _textDim,
           letterSpacing: 0.5,
@@ -436,9 +517,9 @@ class _FeedScreenState extends State<FeedScreen> {
         decoration: BoxDecoration(
           color: cardBg,
           border: Border(
-            top: const BorderSide(color: _border, width: 0.5),
-            right: const BorderSide(color: _border, width: 0.5),
-            bottom: const BorderSide(color: _border, width: 0.5),
+            top: BorderSide(color: _border, width: 0.5),
+            right: BorderSide(color: _border, width: 0.5),
+            bottom: BorderSide(color: _border, width: 0.5),
             // left border is the urgency-aware color
             left: BorderSide(color: leftBorderColor, width: 2.5),
           ),
@@ -450,14 +531,14 @@ class _FeedScreenState extends State<FeedScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(item.source, style: const TextStyle(fontSize: 9, color: _textMuted)),
-                Text(item.time, style: const TextStyle(fontSize: 9, color: _textDim)),
+                Text(item.source, style: TextStyle(fontSize: 9, color: _textMuted)),
+                Text(item.time, style: TextStyle(fontSize: 9, color: _textDim)),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               item.title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: _textPrimary,
@@ -468,7 +549,21 @@ class _FeedScreenState extends State<FeedScreen> {
               const SizedBox(height: 2),
               Text(
                 item.body,
-                style: const TextStyle(fontSize: 9, color: _textMuted, height: 1.5),
+                style: TextStyle(fontSize: 9, color: _textMuted, height: 1.5),
+              ),
+            ],
+            if (DevPrefs.showRawIds) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16162a),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '[ID: ${item.id.length > 20 ? '${item.id.substring(0, 20)}…' : item.id}] [audience: ${item.audience}] [urgent: ${item.isUrgent}]',
+                  style: const TextStyle(fontSize: 7, color: Color(0xFF4a4a6a), fontFamily: 'monospace', height: 1.3),
+                ),
               ),
             ],
             const SizedBox(height: 7),
@@ -571,7 +666,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Nothing here yet',
             style: TextStyle(fontSize: 13, color: _textMuted),
           ),
@@ -686,6 +781,8 @@ class _FeedItem {
   final bool dueIsHot;
   final String time;
   final String dateGroup;
+  // BUG FIX: added audience field so feed can filter by department
+  final String audience;
 
   const _FeedItem({
     required this.id,
@@ -699,5 +796,7 @@ class _FeedItem {
     required this.dueIsHot,
     required this.time,
     required this.dateGroup,
+    // BUG FIX: audience defaults to empty — filtered out until user dept is loaded
+    this.audience = '',
   });
 }

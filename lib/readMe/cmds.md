@@ -24,3 +24,7 @@ git push origin main -f
 
 //run
 flutter run -d chrome
+
+//run as standalonen on phone
+
+ flutter run --release  

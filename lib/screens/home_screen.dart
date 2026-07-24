@@ -1,10 +1,14 @@
 // John 3:16-17
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import '../dev/dev_prefs.dart';
+import '../services/notification_service.dart';
 
 enum _Urgency {urgent, soon , later}
 
@@ -19,20 +23,25 @@ const HomeScreen({super.key, required this.name, required this.role});
 State<HomeScreen> createState()=> _HomeScreenState();
 }
 
+// BUG FIX: all colors now use theme getters so light/dark toggle actually works
 class _HomeScreenState extends State<HomeScreen>{
-  static const _bg = Color(0xFF1a1a2e);
-  static const _surface = Color(0xFF22223a);
-  static const _border = Color(0xFF2d2d4a);
-  static const _accent = Color(0xFF4a4aaa);
-  static const _textPrimary = Color(0xFFe8e8f4);
-  static const _textSecondary = Color(0xFF6b6b9a);
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _surface => Theme.of(context).colorScheme.surfaceContainerHighest;
+  Color get _border => Theme.of(context).dividerColor;
+  Color get _accent => Theme.of(context).colorScheme.primary;
+  Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
+  Color get _textSecondary => Theme.of(context).colorScheme.onSurfaceVariant;
 
+  // BUG FIX: urgency text stays the same, but backgrounds adapt to brightness
   static const _urgentText = Color(0xFFd87a5a);
-  static const _urgentBg = Color(0xFF2a1a1a);
+  Color get _urgentBg => Theme.of(context).brightness == Brightness.dark
+    ? const Color(0xFF2a1a1a) : const Color(0xFFfce8e0);
   static const _soonText = Color(0xFFc49040);
-  static const _soonBg = Color(0xFF2a2010);
+  Color get _soonBg => Theme.of(context).brightness == Brightness.dark
+    ? const Color(0xFF2a2010) : const Color(0xFFfff3d6);
   static const _laterText = Color(0xFF5abcd8);
-  static const _laterBg = Color(0xFF1a3a42);
+  Color get _laterBg => Theme.of(context).brightness == Brightness.dark
+    ? const Color(0xFF1a3a42) : const Color(0xFFe0f2f5);
 
   //load tasks from local storage
   List<Map<String, dynamic>> _tasks= [];
@@ -50,6 +59,13 @@ super.initState(); //call superclass initState
 _loadTasks();
   }
 
+  // BUG FIX: force rebuild when theme changes so getters pick up new colors
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    setState(() {});
+  }
+
   Future<void> _loadTasks() async{
 final prefs = await SharedPreferences.getInstance();
 final raw = prefs.getString(_storageKey);
@@ -58,6 +74,9 @@ if(raw != null){
 final decoded = jsonDecode(raw) as List<dynamic>;
 setState((){
 _tasks = decoded.cast<Map<String,dynamic>>();
+for (final task in _tasks) {
+  task['urgency'] = _computeUrgency(task['dueDateTimestamp'] as int?).name;
+}
 
 });
 
@@ -85,7 +104,7 @@ switch (value){
 //deletion. takss gets removed (using its id) and redrawn first, 
 // then _saveTasks updates the local storage in the background
 Future<void> _deleteTask(String id) async{
-
+NotificationService.cancelNotification(id);
 setState((){
 _tasks.removeWhere((task) => task['id'] == id);
 
@@ -94,8 +113,97 @@ await _saveTasks();
 
 }
 
+final Map<String, Timer> _completionTimers = {};
+
+@override
+void dispose() {
+  for (final t in _completionTimers.values) {
+    t.cancel();
+  }
+  super.dispose();
+}
+
+Future<void> _toggleCompletion(String id) async {
+  if (_completionTimers.containsKey(id)) {
+    _completionTimers[id]!.cancel();
+    _completionTimers.remove(id);
+    setState(() {
+      final idx = _tasks.indexWhere((task) => task['id'] == id);
+      if (idx != -1) {
+        _tasks[idx]['isCompleted'] = false;
+      }
+    });
+    await _saveTasks();
+    return;
+  }
+
+  final wasCompleted = _tasks.firstWhere((t) => t['id'] == id)['isCompleted'] as bool? ?? false;
+
+  if (!wasCompleted) {
+    setState(() {
+      final idx = _tasks.indexWhere((task) => task['id'] == id);
+      if (idx != -1) {
+        _tasks[idx]['isCompleted'] = true;
+      }
+    });
+    await _saveTasks();
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    _completionTimers[id] = Timer(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+      final removedTask = Map<String, dynamic>.from(
+        _tasks.firstWhere((t) => t['id'] == id),
+      );
+      _completionTimers.remove(id);
+
+      setState(() {
+        _tasks.removeWhere((task) => task['id'] == id);
+      });
+      await _saveTasks();
+
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text('Task completed'),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () {
+              setState(() {
+                _tasks.insert(0, removedTask);
+              });
+              _saveTasks();
+            },
+          ),
+        ),
+      );
+    });
+  } else {
+    setState(() {
+      final idx = _tasks.indexWhere((task) => task['id'] == id);
+      if (idx != -1) {
+        _tasks[idx]['isCompleted'] = false;
+      }
+    });
+    await _saveTasks();
+  }
+}
+
 //called by upload sheet
 Future<void> _addTask(Map<String,dynamic> task) async{
+  final timestamp = task['dueDateTimestamp'] as int?;
+  task['urgency'] = _computeUrgency(timestamp).name;
+  if (timestamp != null) {
+    NotificationService.scheduleTaskDueNotification(
+      taskId: task['id'] as String,
+      taskName: task['taskName'] as String? ?? 'Untitled',
+      dueDate: DateTime.fromMillisecondsSinceEpoch(timestamp),
+    );
+  }
+
   setState((){
 
 //insert at index 0 so its the first
@@ -127,6 +235,39 @@ child: _isLoading ? const Center(child: CircularProgressIndicator(
 
 }
 
+String _getGreeting() {
+  final hour = DateTime.now().hour;
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 22) return 'Good evening';
+  return 'Good night';
+}
+
+_Urgency _computeUrgency(int? dueDateTimestamp) {
+  if (dueDateTimestamp == null) return _Urgency.later;
+  final remaining = DateTime.fromMillisecondsSinceEpoch(dueDateTimestamp)
+      .difference(DateTime.now())
+      .inDays;
+  if (remaining <= 1) return _Urgency.urgent;
+  if (remaining <= 3) return _Urgency.soon;
+  return _Urgency.later;
+}
+
+String _daysRemaining(int? dueDateTimestamp) {
+  if (dueDateTimestamp == null) return '';
+  final due = DateTime.fromMillisecondsSinceEpoch(dueDateTimestamp);
+  final now = DateTime.now();
+  final diff = due.difference(now);
+  final days = diff.inDays;
+  if (days < 0) {
+    final overdue = -days;
+    return overdue == 1 ? 'Overdue by 1 day' : 'Overdue by $overdue days';
+  }
+  if (days == 0) return 'Due today';
+  if (days == 1) return '1 day left';
+  return '$days days left';
+}
+
 // renders the header + scrollable task list grouped by urgency 
 // counts tasks per urgency bucket first for the summary chips and section labels stay accurate
 Widget _buildContent(){
@@ -152,33 +293,39 @@ crossAxisAlignment: CrossAxisAlignment.start,
 children: [ 
  // each section only renders if it has tasks
 // if urgentCount is 0 the entire urgent block is skipped
-                      if (urgentCount > 0) ...[
+                       if (urgentCount > 0) ...[
 _buildSectionLabel('Urgent'), ..._tasks.where((task)=> _parseUrgency(task['urgency']
 as String?) == _Urgency.urgent).map((task) => _buildDismissibleCard(taskId: task['id'] as String,
-title: task['taskName'] as String? ?? '', meta: task['dueDate'] as String? ?? '', urgency: _Urgency.urgent,)),
+title: task['taskName'] as String? ?? '', meta: task['dueDate'] as String? ?? '', urgency: _Urgency.urgent,
+isCompleted: task['isCompleted'] as bool? ?? false,
+dueDateTimestamp: task['dueDateTimestamp'] as int?)),
 
-                      ],
-                      if (soonCount > 0) ...[
-                        _buildSectionLabel('Up next'),
-                        ..._tasks.where((task)=> _parseUrgency(task['urgency'] as String?) == _Urgency.soon).map((task)
-                        => _buildDismissibleCard(
-                          taskId: task['id'] as String,
-                        title: task['taskName'] as String? ??'',
-                        meta: task['dueDate'] as String? ??'',
-                        urgency: _Urgency.soon,
-                        )),
-                      ],
-
-                      if(laterCount > 0) ...[
-                        _buildSectionLabel('Later'), ..._tasks.where((task)=>
-                         _parseUrgency(task['urgency'] as String?) == _Urgency.later).map((task) => _buildDismissibleCard(
-                          taskId: task['id'] as String,
-                          title: task['taskName'] as String? ??'',
-                          meta: task['dueDate'] as String? ?? '',
-                          urgency: _Urgency.later,
-
+                       ],
+                       if (soonCount > 0) ...[
+                         _buildSectionLabel('Up next'),
+                         ..._tasks.where((task)=> _parseUrgency(task['urgency'] as String?) == _Urgency.soon).map((task)
+                         => _buildDismissibleCard(
+                           taskId: task['id'] as String,
+                         title: task['taskName'] as String? ??'',
+                         meta: task['dueDate'] as String? ??'',
+                         urgency: _Urgency.soon,
+                         isCompleted: task['isCompleted'] as bool? ?? false,
+                         dueDateTimestamp: task['dueDateTimestamp'] as int?,
                          )),
-                      ],
+                       ],
+
+                       if(laterCount > 0) ...[
+                         _buildSectionLabel('Later'), ..._tasks.where((task)=>
+                          _parseUrgency(task['urgency'] as String?) == _Urgency.later).map((task) => _buildDismissibleCard(
+                           taskId: task['id'] as String,
+                           title: task['taskName'] as String? ??'',
+                           meta: task['dueDate'] as String? ?? '',
+                           urgency: _Urgency.later,
+                           isCompleted: task['isCompleted'] as bool? ?? false,
+                           dueDateTimestamp: task['dueDateTimestamp'] as int?,
+
+                          )),
+                       ],
                       const SizedBox(height: 80),
 
 ],
@@ -194,8 +341,9 @@ title: task['taskName'] as String? ?? '', meta: task['dueDate'] as String? ?? ''
 // renders a swipeable wrapper around a task card — swiping left reveals a red
 // delete background with a bin icon, then removes the task from the list and local storage
 
+// BUG FIX: added isCompleted so the checkbox + dimmed styling works on the card
 Widget _buildDismissibleCard({required String taskId, required String title, 
-required String meta, required _Urgency urgency,}) {
+required String meta, required _Urgency urgency, required bool isCompleted, int? dueDateTimestamp,}) {
   return Dismissible(
 //uses the key to id whichc card to delete
 
@@ -228,7 +376,8 @@ return true;
 // named parameters use a colon, not parens: onDismissed: (direction) {}
 onDismissed: (direction) {},
 
-child: _buildTaskCard(title: title, meta : meta, urgency: urgency,),
+child: _buildTaskCard(taskId: taskId, title: title, meta : meta, urgency: urgency, isCompleted: isCompleted,
+dueDateTimestamp: dueDateTimestamp,),
   );
 }
 
@@ -237,11 +386,11 @@ child: _buildTaskCard(title: title, meta : meta, urgency: urgency,),
 Widget _buildHeader(int urgentCount,int soonCount, int laterCount){
 return Container(
 padding : const EdgeInsets.fromLTRB(18,14,18,10),
-decoration:  const BoxDecoration(border: Border(bottom: BorderSide(color: _border, width: 0.5)),
+decoration:  BoxDecoration(border: Border(bottom: BorderSide(color: _border, width: 0.5)),
 ),
 child : Column(crossAxisAlignment: CrossAxisAlignment.start,children: [
-Text('Greetings, ${widget.name}',
-style:  const TextStyle(fontSize:20, fontWeight: FontWeight.w500, color : _textPrimary,),),
+Text('${_getGreeting()}, ${widget.name}',
+style:  TextStyle(fontSize:20, fontWeight: FontWeight.w500, color : _textPrimary,),),
 const SizedBox(height: 7),
 
 Row(children:[
@@ -275,7 +424,7 @@ Widget _buildSummaryChip(String label, Color textColor, Color bgColor){
 // used to visually separate task groups in the scrollable list
 Widget _buildSectionLabel(String label){
   return Padding(padding: const EdgeInsets.fromLTRB(18,10,18,5),
-  child: Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, color: _textSecondary,
+  child: Text(label.toUpperCase(), style: TextStyle(fontSize: 10, color: _textSecondary,
   letterSpacing: 0.5,),),);
 }
 
@@ -298,9 +447,9 @@ Color(0xFF4a4a6a)),),
 }
 
 // renders a single task card with a colored left border that reflects urgency,
-// a title, a due date string (meta), and a badge pill showing the urgency level
-Widget _buildTaskCard({required String title, required String meta,
- required _Urgency urgency}){
+// a title, a due date string (meta), a days-remaining label, and a badge pill
+Widget _buildTaskCard({required String taskId, required String title, required String meta,
+ required _Urgency urgency, required bool isCompleted, int? dueDateTimestamp,}){
 
 final borderColor = switch(urgency){
   _Urgency.urgent => const Color(0xFFd85a30),
@@ -319,25 +468,61 @@ final badgeBg = urgency == _Urgency.urgent ? const Color(0xFF3a1a1a) :
  return Container(
 
 margin : const EdgeInsets.fromLTRB(14,0,14,6),
-decoration : BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16),
-border : Border.all(color: _border,  width: 0.5),),
+decoration : BoxDecoration(color: isCompleted ? const Color(0xFF1c1c2e) : cardBg, borderRadius: BorderRadius.circular(16),
+border : Border.all(color: isCompleted ? const Color(0xFF2a2a3a) : _border,  width: 0.5),),
 
 child : ClipRRect(
   borderRadius: BorderRadius.circular(16),
   child: Container(padding: const EdgeInsets.all(14),decoration : BoxDecoration(
-border: Border(left: BorderSide(color: borderColor, width : 4)),
+border: Border(left: BorderSide(color: isCompleted ? const Color(0xFF3a3a3a) : borderColor, width : 4)),
 ), child : Row(
 crossAxisAlignment: CrossAxisAlignment.start, children : [
+// BUG FIX: completion toggle circle
+GestureDetector(
+  onTap: () => _toggleCompletion(taskId),
+  child: Container(
+    width: 18, height: 18,
+    margin: const EdgeInsets.only(right: 10, top: 1),
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: isCompleted ? const Color(0xFF2a5a2a) : Colors.transparent,
+      border: Border.all(
+        color: isCompleted ? const Color(0xFF4a9a4a) : const Color(0xFF4a4a6a),
+        width: 1.5,
+      ),
+    ),
+    child: isCompleted
+        ? const Icon(Icons.check, size: 12, color: Color(0xFF5abba0))
+        : null,
+  ),
+),
 Expanded(child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,  children: [Text(title, style:
-const TextStyle(fontSize:12, fontWeight: FontWeight.w500, color : _textPrimary,),),
+TextStyle(
+  fontSize:12, fontWeight: FontWeight.w500,
+  color : isCompleted ? const Color(0xFF4a4a6a) : _textPrimary,
+  decoration: isCompleted ? TextDecoration.lineThrough : null,
+),),
 
 const SizedBox(height: 4),
 
   // meta is the due date string the user typed
 
-  Text(meta, style: const TextStyle(fontSize:10.5, color : _textSecondary,),),
-
+  Text(meta, style: TextStyle(
+    fontSize:10.5,
+    color : isCompleted ? const Color(0xFF3a3a5a) : _textSecondary,
+  ),),
+  if (dueDateTimestamp != null && !isCompleted) ...[
+    const SizedBox(height: 3),
+    Text(_daysRemaining(dueDateTimestamp), style: TextStyle(
+      fontSize: 9.5,
+      color: _daysRemaining(dueDateTimestamp).startsWith('Overdue')
+          ? const Color(0xFFd87a5a)
+          : _daysRemaining(dueDateTimestamp) == 'Due today'
+              ? const Color(0xFFc49040)
+              : _textSecondary,
+    )),
+  ],
 
 ],
 
@@ -345,9 +530,17 @@ const SizedBox(height: 4),
 ),),
 
 Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical:3),
-decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(10),),
-child: Text(urgency == _Urgency.urgent ? 'Urgent' : urgency == _Urgency.soon ?
- 'Soon' : 'Later', style: TextStyle(fontSize: 9.5, color : badgeText),),
+decoration: BoxDecoration(
+  color: isCompleted ? const Color(0xFF1a1a2a) : badgeBg,
+  borderRadius: BorderRadius.circular(10),
+),
+child: Text(
+  urgency == _Urgency.urgent ? 'Urgent' : urgency == _Urgency.soon ? 'Soon' : 'Later',
+  style: TextStyle(
+    fontSize: 9.5,
+    color: isCompleted ? const Color(0xFF3a3a5a) : badgeText,
+  ),
+),
 ),
 
 ],
@@ -367,7 +560,7 @@ onPressed:() async {
 
 final newTask = await showModalBottomSheet<Map<String, dynamic>>(
   context : context, isScrollControlled: true, backgroundColor: Colors.transparent,
-  builder : (context) => const _UploadSheet(),
+  builder : (context) => _UploadSheet(role: widget.role),
 );
 
 //if a task is Returned ad it to the local list
@@ -394,12 +587,15 @@ child: const Icon(Icons.add, size: 28),
 
 }
 
+// BUG FIX: broadcast tab now checks _canBroadcast — only reps + developer see it
 //upload SHeet
 //make broadcasr exclusive to reps(per role)
 
 
 class _UploadSheet extends StatefulWidget{
-const _UploadSheet();
+  final String role;
+
+const _UploadSheet({required this.role});
 
 @override
 // BUG FIX: was State<_UploadSheetState> — should extend the state of _UploadSheet
@@ -409,14 +605,20 @@ State<_UploadSheet> createState() => _UploadSheetState();
 
 // BUG FIX: was `extends State<_UploadSheetState>` — a State must be typed to its
 // owning StatefulWidget (_UploadSheet), not to itself
+// BUG FIX: replaced static const with theme getters for light/dark mode support
 class _UploadSheetState extends State<_UploadSheet>{
+  // BUG FIX: developer same as rep — both can broadcast; respects role sim override
+  bool get _canBroadcast {
+    final role = DevPrefs.effectiveRole(widget.role);
+    return role == 'rep' || role == 'developer';
+  }
 
- static const _bg = Color(0xFF1a1a2e);
-  static const _surface = Color(0xFF22223a);
-  static const _border = Color(0xFF2d2d4a);
-  static const _accent = Color(0xFF4a4aaa);
-  static const _textPrimary = Color(0xFFe8e8f4);
-  static const _textMuted = Color(0xFF6b6b9a);
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _surface => Theme.of(context).colorScheme.surfaceContainerHighest;
+  Color get _border => Theme.of(context).dividerColor;
+  Color get _accent => Theme.of(context).colorScheme.primary;
+  Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
+  Color get _textMuted => Theme.of(context).colorScheme.onSurfaceVariant;
 
   static const _colorUrgent = Color(0xFFd85a30);
   static const _colorSoon = Color(0xFF5c5cd6);
@@ -436,6 +638,7 @@ final _bodyController = TextEditingController();
 final _sourceController = TextEditingController();
 final _broadcastDueDateController = TextEditingController();
 
+DateTime? _pickedDate;
 String? _selectedUrgency;
 // BUG FIX: default didn't match the new audience chip options below — no chip
 // would show as selected on first open. Defaulting to the first option instead.
@@ -462,7 +665,7 @@ Widget build(BuildContext context){
 final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
 return Container(
-  decoration:const BoxDecoration(color : _surface, 
+  decoration:BoxDecoration(color : _surface, 
   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),),
 
 // BUG FIX: was `botomInset` — variable declared above is `bottomInset`
@@ -480,17 +683,24 @@ borderRadius : BorderRadius.circular(2),),
 
 const SizedBox(height: 16),
 //title
-const Text('New Post', style : TextStyle(fontSize:15, fontWeight: FontWeight.w500,
+Text('New Post', style : TextStyle(fontSize:15, fontWeight: FontWeight.w500,
 color : _textPrimary),),
 
-const SizedBox(height : 14),
-_buildTabRow(), // show personal / broadcast tabs wilddget
-const SizedBox(height:16),
+// BUG FIX: removed _buildTabRow() for non-broadcast users — students only see personal form
+// show personal / broadcast tabs wilddget
+if(_canBroadcast) ...[
+  const SizedBox(height : 14),
+  _buildTabRow(),
+  const SizedBox(height:16),
+],
 
 // BUG FIX: was calling undefined _buildBroadcastFrom() in both branches —
 // personal tab now correctly routes to _buildPersonalForm(),
 // broadcast tab routes to _buildBroadcastForm()
-_activeTab == 0 ? _buildPersonalForm() : _buildBroadcastForm(),
+// BUG FIX: non-broadcast roles always get personal form regardless of _activeTab
+_canBroadcast
+  ? (_activeTab == 0 ? _buildPersonalForm() : _buildBroadcastForm())
+  : _buildPersonalForm(),
 
 const  SizedBox(height: 16),
 _buildUrgencyPicker(),
@@ -515,6 +725,7 @@ Widget _buildTab(String label, {required int index}){
   return Expanded(child: GestureDetector(onTap:() => setState((){_activeTab = index;
   //reset urgency selection when switching tabs
   _selectedUrgency = null;
+  _pickedDate = null;
   
   }), child:  Container(padding:const EdgeInsets.symmetric(vertical:7), decoration : 
   BoxDecoration(color : isActive? const Color (0xFF3a3a7a) : Colors.transparent,
@@ -525,12 +736,66 @@ Widget _buildTab(String label, {required int index}){
 
 // BUG FIX: this used to contain the broadcast fields (title/body/source/etc) —
 // restored to the personal tab's actual two fields: task name + due date
+// BUG FIX: due date now uses a date picker instead of free-text
 Widget _buildPersonalForm(){
 return Column(crossAxisAlignment : CrossAxisAlignment.start, children : [
   _buildField('Task name', _taskNameController),
   const SizedBox(height: 10),
-  _buildField('Due date', _taskDueDateController, hint: 'e.g. Friday, Dec 20'),
+  _buildDateField(),
 ],);
+}
+
+// BUG FIX: new date picker field — tapping opens a system date picker dialog
+// and populates the controller with a formatted date string
+Widget _buildDateField(){
+return Column(crossAxisAlignment : CrossAxisAlignment.start, children : [
+_buildLabel('Due date'), const SizedBox(height: 5),
+GestureDetector(
+  onTap: _pickDate,
+  child: Container(
+    decoration: BoxDecoration(color: _bg,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: const Color(0xFF3a3a6a), width: 0.5),
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    child: Row(children: [
+      Expanded(child: Text(
+        _taskDueDateController.text.isEmpty
+          ? 'Pick a date'
+          : _taskDueDateController.text,
+        style: TextStyle(
+          fontSize: 11,
+          color: _taskDueDateController.text.isEmpty
+            ? const Color(0xFF4a4a6a) : _textPrimary,
+        ),
+      )),
+      const Icon(Icons.calendar_today, size: 14, color: Color(0xFF4a4a6a)),
+    ],),
+  ),
+),],);
+}
+
+Future<void> _pickDate() async {
+final now = DateTime.now();
+final picked = await showDatePicker(
+context: context,
+initialDate: now,
+firstDate: now,
+lastDate: DateTime(now.year + 5),
+);
+if(picked != null && mounted){
+final dueAtMidnight = DateTime(picked.year, picked.month, picked.day);
+final remaining = dueAtMidnight.difference(now).inDays;
+String? urgency;
+if (remaining <= 1) urgency = 'Urgent';
+else if (remaining <= 3) urgency = 'Soon';
+else urgency = 'Later';
+setState(() {
+_pickedDate = dueAtMidnight;
+_selectedUrgency = urgency;
+_taskDueDateController.text = DateFormat('EEE, MMM d').format(picked);
+});
+}
 }
 
 // BUG FIX: this is the form that was previously (and wrongly) named
@@ -568,7 +833,7 @@ Widget _buildField(String label, TextEditingController controller, {String? hint
 return Column(crossAxisAlignment : CrossAxisAlignment.start, children: [
 _buildLabel(label), const SizedBox(height: 5), Container(decoration: BoxDecoration(color: _bg,
 borderRadius: BorderRadius.circular(8), border : Border.all(color: const Color(0xFF3a3a6a), width: 0.5),), child:
-TextField(controller: controller, maxLines : tall? 3 : 1, style : const TextStyle(fontSize: 11, color: _textPrimary),
+TextField(controller: controller, maxLines : tall? 3 : 1, style : TextStyle(fontSize: 11, color: _textPrimary),
 decoration : InputDecoration( border : InputBorder.none, contentPadding:
  const EdgeInsets.symmetric(horizontal : 12, vertical: 9,),
 hintText: hint, hintStyle: const TextStyle(fontSize: 11, color : Color(0xFF4a4a6a),),
@@ -581,7 +846,7 @@ hintText: hint, hintStyle: const TextStyle(fontSize: 11, color : Color(0xFF4a4a6
 }
 
 Widget _buildLabel(String text){
-  return Text(text, style : const TextStyle(fontSize: 10, color: _textMuted, letterSpacing: 0.3),);
+  return Text(text, style : TextStyle(fontSize: 10, color: _textMuted, letterSpacing: 0.3),);
 }
 
 Widget _buildAudienceChips(){
@@ -680,7 +945,7 @@ borderRadius: BorderRadius.circular(10),
 ),
 
 child : Text(_isSubmitting ? 'Sending' : isPersonal ? 'Add Task' : 'Broadcast',
-textAlign : TextAlign.center, style: const TextStyle(fontSize:12, fontWeight : FontWeight.w500,
+textAlign : TextAlign.center, style: TextStyle(fontSize:12, fontWeight : FontWeight.w500,
 color : _textPrimary,),
 ),
 ),
@@ -716,8 +981,11 @@ return;
 'id'  : DateTime.now().millisecondsSinceEpoch.toString(),
 'taskName' : _taskNameController.text.trim(),
 'dueDate' : _taskDueDateController.text.trim(),
+'dueDateTimestamp' : _pickedDate?.millisecondsSinceEpoch,
 'urgency':  _selectedUrgency,
 'category' :  'Personal',
+// BUG FIX: track completion state so tasks can be toggled done
+'isCompleted' : false,
   };
 
   _showToast('Task added');
@@ -732,6 +1000,12 @@ return;
 
 //broadcast tab
  else{
+// BUG FIX: safety check — block broadcast if role doesnt have permission
+if (!_canBroadcast) {
+  _showToast('Only reps can broadcast announcements', isError: true);
+  return;
+}
+
 final user = FirebaseAuth.instance.currentUser;
 if(user == null){
   _showToast('Error: user not logged in', isError: true);

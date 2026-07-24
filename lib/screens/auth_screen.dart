@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'home_screen.dart';
+
 import'shell_screen.dart';
+import '../dev/dev_log.dart';
 
 class AuthScreen extends StatefulWidget {
   //this is the constructor for the auth screen
@@ -62,6 +63,10 @@ class _AuthScreenState extends State<AuthScreen> {
     return email.trim().endsWith('@ulk.ac.rw');
   }
 
+  bool _isDevEmail(String email) {
+    return email.trim().endsWith('@yvl.dev');
+  }
+
   //local form validation to make sure no bs gets sent to the backend
   bool _validateForm() {
     //trimming the email to remove any leading or trailing spaces and shares them in the class
@@ -96,7 +101,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
 
       // "valid address" is disclosed privately
-      if (_role == 'rep' && !_isValidRepEmail(email)) {
+      if (_role == 'rep' && !_isValidRepEmail(email) && !_isDevEmail(email)) {
         _showToast("Rep accounts require a @ulk.ac.rw email", isError: true);
         return false;
       }
@@ -134,14 +139,24 @@ class _AuthScreenState extends State<AuthScreen> {
         final doc = await _firestore
             .collection('users')
             .doc(credential.user!.uid)
-            .get(); //get the user role from the firestore database
+            .get();
 
-        final userRole = doc.data()?['role'] ?? 'student'; // if role exists use otherwise default to student
-        final userName = doc.data()?['name'] ?? 'there'; // fetch name from Firestore
+        var userRole = doc.data()?['role'] ?? 'student';
+        final userName = doc.data()?['name'] ?? 'there';
+        final email = doc.data()?['email'] as String? ?? credential.user!.email ?? '';
+
+        // auto-upgrade .yvl.dev accounts to developer
+        if (_isDevEmail(email) && userRole != 'developer') {
+          await _firestore.collection('users').doc(credential.user!.uid).update({
+            'role': 'developer',
+            'email': email,
+          });
+          userRole = 'developer';
+          DevLog.log('Dev upgrade on login', detail: email);
+        }
 
         _showToast("Welcome back.");
 
-        // Navigate to home, passing the real role from Firestore
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -156,17 +171,27 @@ class _AuthScreenState extends State<AuthScreen> {
           password: _passwordController.text.trim(),
         );
 
-        //save user profile to firestore
+        // force developer role for .yvl.dev emails
+        final email = _emailController.text.trim();
+        if (_isDevEmail(email)) {
+          _role = 'developer';
+        }
+
         await _firestore.collection('users').doc(credential.user!.uid).set({
           'name': _nameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'role': _role, // 'student' or 'rep'
-          'class': _classController.text.trim(), // optional for reps
+          'email': email,
+          'role': _role,
+          'class': _classController.text.trim(),
           'department': _deptController.text.trim(),
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        _showToast("Account created.");
+        if (_role == 'developer') {
+          DevLog.log('Dev account created', detail: email);
+          _showToast("Dev account activated! 🚀");
+        } else {
+          _showToast("Account created.");
+        }
 
         if (mounted) {
           Navigator.pushReplacement(
@@ -336,7 +361,27 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 24),
 
-              //role selector
+              //role selector — hidden for .yvl.dev emails (auto-assigned developer)
+              if (_isDevEmail(_emailController.text.trim()))
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF3a3a7a), width: 0.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome, size: 14, color: Color(0xFF8888dd)),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Developer account auto-assigned',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF8888dd)),
+                      ),
+                    ],
+                  ),
+                )
+              else
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
