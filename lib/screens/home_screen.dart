@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../dev/dev_prefs.dart';
-import '../services/notification_service.dart';
 
 enum _Urgency {urgent, soon , later}
 
@@ -104,7 +103,6 @@ switch (value){
 //deletion. takss gets removed (using its id) and redrawn first, 
 // then _saveTasks updates the local storage in the background
 Future<void> _deleteTask(String id) async{
-NotificationService.cancelNotification(id);
 setState((){
 _tasks.removeWhere((task) => task['id'] == id);
 
@@ -196,13 +194,6 @@ Future<void> _toggleCompletion(String id) async {
 Future<void> _addTask(Map<String,dynamic> task) async{
   final timestamp = task['dueDateTimestamp'] as int?;
   task['urgency'] = _computeUrgency(timestamp).name;
-  if (timestamp != null) {
-    NotificationService.scheduleTaskDueNotification(
-      taskId: task['id'] as String,
-      taskName: task['taskName'] as String? ?? 'Untitled',
-      dueDate: DateTime.fromMillisecondsSinceEpoch(timestamp),
-    );
-  }
 
   setState((){
 

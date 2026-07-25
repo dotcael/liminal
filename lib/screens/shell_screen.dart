@@ -35,6 +35,22 @@ class _ShellScreenState extends State<ShellScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    DevPrefs.roleOverrideNotifier.addListener(_onRoleChanged);
+  }
+
+  void _onRoleChanged() {
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    DevPrefs.roleOverrideNotifier.removeListener(_onRoleChanged);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // BUG FIX: pull theme colors fresh each build so light/dark toggle works
     final theme = Theme.of(context);

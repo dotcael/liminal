@@ -14,17 +14,12 @@ import 'screens/feed_screen.dart';
 import 'screens/shell_screen.dart';
 import 'dev/dev_prefs.dart';
 import 'dev/dev_log.dart';
-import 'services/notification_service.dart';
-
 void main() async {
   // ensures flutter engine is fully ready before any async work runs
   WidgetsFlutterBinding.ensureInitialized();
 
   // boots firebase using the auto-generated platform config from flutterfire cli
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // boots local notification scheduling
-  await NotificationService.init();
 
   runApp(const LiminalApp());
 }
@@ -43,7 +38,7 @@ class LiminalApp extends StatefulWidget {
 // via context.findAncestorStateOfType<LiminalAppState>()
 class LiminalAppState extends State<LiminalApp> {
   ThemeMode _themeMode = ThemeMode.dark;
-  double _textScaleFactor = 1.0;
+  double _textScaleFactor = 1.15;
 
   bool get isDarkMode => _themeMode == ThemeMode.dark;
   double get textScaleFactor => _textScaleFactor;
