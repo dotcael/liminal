@@ -9,7 +9,13 @@ class DevPrefs {
 
   static final ValueNotifier<String?> roleOverrideNotifier = ValueNotifier(null);
 
+  /// Dev tools are only available in debug/profile builds.
+  /// In release builds, all dev features are disabled regardless of stored prefs.
+  static bool get isDebugBuild => !kReleaseMode;
+
   static Future<void> load() async {
+    if (!isDebugBuild) return;
+
     final prefs = await SharedPreferences.getInstance();
     roleOverride = prefs.getString('dev_role_override');
     roleOverrideNotifier.value = roleOverride;
@@ -19,6 +25,8 @@ class DevPrefs {
   }
 
   static Future<void> setRoleOverride(String? role) async {
+    if (!isDebugBuild) return;
+
     roleOverride = role;
     roleOverrideNotifier.value = role;
     final prefs = await SharedPreferences.getInstance();
@@ -30,23 +38,29 @@ class DevPrefs {
   }
 
   static Future<void> setBypassAudience(bool v) async {
+    if (!isDebugBuild) return;
+
     bypassAudience = v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('dev_bypass_audience', v);
   }
 
   static Future<void> setShowRawIds(bool v) async {
+    if (!isDebugBuild) return;
+
     showRawIds = v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('dev_show_raw_ids', v);
   }
 
   static Future<void> setDebugPaint(bool v) async {
+    if (!isDebugBuild) return;
+
     debugPaint = v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('dev_debug_paint', v);
   }
 
   static String effectiveRole(String realRole) => roleOverride ?? realRole;
-  static bool isDev(String realRole) => effectiveRole(realRole) == 'developer';
+  static bool isDev(String realRole) => isDebugBuild && effectiveRole(realRole) == 'developer';
 }

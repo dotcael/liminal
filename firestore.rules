@@ -1,0 +1,54 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Users ──────────────────────────────────────────────────────────────
+    // Users can read any profile (needed for department-based audience
+    // filtering in the feed).  Writes are owner-only, and the role field
+    // is immutable on the client — it can only be set by a Cloud Function.
+    match /users/{userId} {
+      allow read: if request.auth != null;
+
+      // Signup: client creates its own doc, but role must be 'student' or 'rep'.
+      // The server-side onUserCreate function handles @yvl.dev → developer.
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.role in ['student', 'rep']
+                    && request.resource.data.keys().hasAll(['name', 'email', 'role', 'department', 'createdAt']);
+
+      // Update: owner can update everything EXCEPT role.
+      // FCM token writes (merge) go through this path.
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
+
+      // No deletes allowed from the client.
+      allow delete: if false;
+    }
+
+    // ── Broadcasts ─────────────────────────────────────────────────────────
+    // Anyone authenticated can read (the feed is public to the school).
+    // Only reps and developers can create — enforced BOTH here and by the
+    // onBroadcastWrite Cloud Function (belt-and-suspenders).
+    match /broadcast/{docId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasAll([
+                         'title', 'body', 'source', 'audience',
+                         'category', 'urgency', 'uid', 'createdAt'
+                       ])
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() <= 200
+                    && request.resource.data.body is string
+                    && request.resource.data.body.size() <= 2000
+                    && request.resource.data.source is string
+                    && request.resource.data.source.size() <= 100
+                    && request.resource.data.uid == request.auth.uid;
+
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

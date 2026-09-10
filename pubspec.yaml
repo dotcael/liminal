@@ -18,11 +18,15 @@ dependencies:
   firebase_auth: ^5.3.0
   cloud_firestore: ^5.4.0
   firebase_messaging: ^15.0.0
+  firebase_app_check: ^0.3.2+10
 
   # Helpers for nice UI/UX
   provider: ^6.1.2
   intl: ^0.19.0
-  fluttertoast: ^8.2.8
+
+  # Local notifications for task due/pre-reminder reminders
+  flutter_local_notifications: ^19.4.1
+  timezone: ^0.10.1
 
 dev_dependencies:
   flutter_test:

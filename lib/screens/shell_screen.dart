@@ -1,12 +1,11 @@
-// John 3:16-17
-// BUG FIX: replaced the old colored-square nav with real material icons
-// outlined variant for inactive tabs, filled for the active one
 import 'package:flutter/material.dart';
+import '../dev/dev_prefs.dart';
+import '../dev/floating_toolbar.dart';
+import '../widgets/haptics.dart';
+import '../widgets/pressable.dart';
 import 'home_screen.dart';
 import 'feed_screen.dart';
 import 'profile_screen.dart';
-import '../dev/dev_prefs.dart';
-import '../dev/floating_toolbar.dart';
 
 class ShellScreen extends StatefulWidget {
   final String name;
@@ -19,15 +18,16 @@ class ShellScreen extends StatefulWidget {
 }
 
 class _ShellScreenState extends State<ShellScreen> {
-  // BUG FIX: added icon data for each nav item
   static const _navItems = [
     _NavItem(label: 'Home',    icon: Icons.home_rounded,        activeIcon: Icons.home_rounded),
     _NavItem(label: 'Feed',    icon: Icons.explore_outlined,    activeIcon: Icons.explore_rounded),
     _NavItem(label: 'Profile', icon: Icons.person_outline,      activeIcon: Icons.person_rounded),
   ];
 
-  // tracks which tab is visible — 0 = Home, 1 = Feed, 2 = Profile
+  static const _navBarHeight = 56.0;
+
   int _currentIndex = 0;
+  bool _showNavBar = true;
 
   bool get _isDev {
     final override = DevPrefs.roleOverride;
@@ -52,7 +52,6 @@ class _ShellScreenState extends State<ShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // BUG FIX: pull theme colors fresh each build so light/dark toggle works
     final theme = Theme.of(context);
     final bg = theme.scaffoldBackgroundColor;
     final border = theme.dividerColor;
@@ -61,21 +60,44 @@ class _ShellScreenState extends State<ShellScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _currentIndex,
-            children: [
-              HomeScreen(name: widget.name, role: widget.role),
-              FeedScreen(),
-              ProfileScreen(name: widget.name, role: widget.role),
-            ],
-          ),
-          if (_isDev)
-            FloatingDevToolbar(realRole: widget.role),
-        ],
+      body: NotificationListener<ScrollUpdateNotification>(
+        onNotification: (notification) {
+          final delta = notification.scrollDelta ?? 0;
+          if (delta.abs() > 3) {
+            if (delta > 0 && _showNavBar) {
+              setState(() => _showNavBar = false);
+            } else if (delta < 0 && !_showNavBar) {
+              setState(() => _showNavBar = true);
+            }
+          }
+          return false;
+        },
+        child: Stack(
+          children: [
+            Padding(
+              padding: EdgeInsets.only(bottom: _showNavBar ? _navBarHeight : 0),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: [
+                  HomeScreen(name: widget.name, role: widget.role),
+                  FeedScreen(),
+                  ProfileScreen(name: widget.name, role: widget.role),
+                ],
+              ),
+            ),
+            if (_isDev && DevPrefs.isDebugBuild)
+              FloatingDevToolbar(realRole: widget.role),
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: AnimatedSlide(
+                offset: _showNavBar ? Offset.zero : const Offset(0, 1.2),
+                duration: const Duration(milliseconds: 200),
+                child: _buildNavBar(bg, border, textMuted, activeColor),
+              ),
+            ),
+          ],
+        ),
       ),
-      bottomNavigationBar: _buildNavBar(bg, border, textMuted, activeColor),
     );
   }
 
@@ -84,34 +106,49 @@ class _ShellScreenState extends State<ShellScreen> {
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: border, width: 0.5)),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(_navItems.length,
-            (i) => _buildNavItem(_navItems[i], index: i, textMuted: textMuted, activeColor: activeColor)),
+      padding: const EdgeInsets.only(top: 6),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: List.generate(_navItems.length,
+              (i) => _buildNavItem(_navItems[i], index: i, textMuted: textMuted, activeColor: activeColor)),
+        ),
       ),
     );
   }
 
   Widget _buildNavItem(_NavItem item, {required int index, required Color textMuted, required Color activeColor}) {
     final isActive = _currentIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
+    return AppPressable(
+      haptic: false,
+      onTap: () {
+        if (isActive) return;
+        Haptics.select();
+        setState(() => _currentIndex = index);
+      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            isActive ? item.activeIcon : item.icon,
-            size: 20,
-            color: isActive ? activeColor : textMuted,
-          ),
-          const SizedBox(height: 3),
-          Text(
-            item.label,
-            style: TextStyle(
-              fontSize: 9,
+          AnimatedScale(
+            scale: isActive ? 1.12 : 1.0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutBack,
+            child: Icon(
+              isActive ? item.activeIcon : item.icon,
+              size: 20,
               color: isActive ? activeColor : textMuted,
             ),
+          ),
+          const SizedBox(height: 3),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 200),
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              color: isActive ? activeColor : textMuted,
+            ),
+            child: Text(item.label, maxLines: 1),
           ),
         ],
       ),

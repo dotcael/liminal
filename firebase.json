@@ -38,6 +38,12 @@
       }
     }
   },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "functions": {
+    "source": "functions"
+  },
   "emulators": {
     "singleProjectMode": true
   }

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'shell_screen.dart';
 import '../dev/dev_prefs.dart';
 import '../dev/dev_log.dart';
+import '../services/fcm_service.dart';
 
 
 class SplashScreen extends StatefulWidget {
@@ -22,7 +23,9 @@ void initState() {
   _checkAuthAndNavigate();
 }
 Future<void> _checkAuthAndNavigate() async {
-  await Future.delayed(const Duration(seconds: 3));
+  // BUG FIX: conventional splash duration — was a hard 3s, which felt slow.
+  // 1s is just enough for the logo to register without dragging startup.
+  await Future.delayed(const Duration(seconds: 1));
 
   await DevPrefs.load();
   await DevLog.load();
@@ -40,6 +43,10 @@ Future<void> _checkAuthAndNavigate() async {
 
     final name = doc.data()?['name'] ?? 'there';
     final role = doc.data()?['role'] ?? 'student';
+
+    // BUG FIX (Phase C): wire FCM token + push listeners for the signed-in user
+    FcmService.configureListeners();
+    FcmService.ensureToken();
 
     if (!mounted) return;
 

@@ -2,14 +2,18 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'auth_screen.dart';
+import 'settings_screen.dart';
 import '../main.dart';
 import '../dev/dev_prefs.dart';
 import '../dev/dev_log.dart';
 import '../dev/data_seeder.dart';
 import '../dev/command_palette.dart';
 import '../dev/firestore_explorer.dart';
+import '../services/fcm_service.dart';
+import '../widgets/app_toast.dart';
+import '../widgets/haptics.dart';
+import '../widgets/pressable.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String name;
@@ -70,6 +74,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _handleLogout() async {
+    // BUG FIX (Phase C): stop targeting this device for pushes on logout
+    try {
+      await FcmService.clearToken();
+    } catch (_) {}
     await FirebaseAuth.instance.signOut();
     if (mounted) {
       Navigator.pushAndRemoveUntil(
@@ -102,11 +110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 24),
           _buildInfoSection(),
           const SizedBox(height: 24),
-          _buildThemeSection(),
-          const SizedBox(height: 24),
-          _buildDisplaySection(),
-          const SizedBox(height: 24),
-          if (_isDev) ...[
+          if (_isDev && DevPrefs.isDebugBuild) ...[
             _buildDevSection(),
           ] else ...[
             _isRep ? _buildRepSection() : _buildStudentSection(),
@@ -164,6 +168,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 4),
             roleBadge,
           ],
+        ),
+        const Spacer(),
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+          ),
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _border, width: 0.5),
+            ),
+            child: const Icon(Icons.settings_outlined, size: 16, color: Color(0xFF8888dd)),
+          ),
         ),
       ],
     );
@@ -274,131 +295,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildThemeSection() {
-    final appState = context.findAncestorStateOfType<LiminalAppState>();
-    final isDark = appState != null ? appState.isDarkMode : true;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel('Appearance'),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: () => appState?.toggleTheme(),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: _surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _border, width: 0.5),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      isDark ? Icons.dark_mode : Icons.light_mode,
-                      size: 16,
-                      color: isDark ? const Color(0xFF8888dd) : const Color(0xFFc49040),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      isDark ? 'Dark mode' : 'Light mode',
-                      style: TextStyle(fontSize: 11, color: _textPrimary),
-                    ),
-                  ],
-                ),
-                Container(
-                  width: 36, height: 20,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF3a3a7a) : const Color(0xFFc49040),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: Row(
-                    mainAxisAlignment: isDark ? MainAxisAlignment.start : MainAxisAlignment.end,
-                    children: [
-                      Container(
-                        width: 14, height: 14,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFFe8e8f4),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDisplaySection() {
-    final appState = context.findAncestorStateOfType<LiminalAppState>();
-    final factor = appState?.textScaleFactor ?? 1.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel('Display'),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _border, width: 0.5),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.text_fields, size: 14, color: _textMuted),
-                  const SizedBox(width: 8),
-                  Text('Text size', style: TextStyle(fontSize: 11, color: _textPrimary)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Text('A', style: TextStyle(fontSize: 10, color: _textDim)),
-                  Expanded(
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: _accent,
-                        inactiveTrackColor: _border,
-                        thumbColor: _accent,
-                        overlayColor: _accent.withValues(alpha: 0.12),
-                        trackHeight: 3,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                      ),
-                      child: Slider(
-                        value: factor,
-                        min: 0.8,
-                        max: 1.5,
-                        divisions: 14,
-                        onChanged: (v) => appState?.setTextScaleFactor(v),
-                      ),
-                    ),
-                  ),
-                  Text('A', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _textDim)),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${factor.toStringAsFixed(2)}×',
-                style: TextStyle(fontSize: 9, color: _textMuted),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildRepSection() {
     return Column(
@@ -680,7 +576,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildActionChip(IconData icon, String label, VoidCallback onTap) {
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -704,14 +600,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _confirmClearTasks() async {
     final confirmed = await showDialog<bool>(
       context: context,
+      // colors + shape come from the app theme's dialogTheme now
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1a1a2e),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Clear tasks?', style: TextStyle(fontSize: 14, color: Color(0xFFe8e8f4))),
-        content: const Text('This will delete all your local tasks. This cannot be undone.', style: TextStyle(fontSize: 11, color: Color(0xFF6b6b9a))),
+        title: const Text('Clear tasks?'),
+        content: const Text('This will delete all your local tasks. This cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Color(0xFF6b6b9a)))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear', style: TextStyle(color: Color(0xFFd87a5a)))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Haptics.warning();
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Clear', style: TextStyle(color: Color(0xFFd87a5a))),
+          ),
         ],
       ),
     );
@@ -795,7 +699,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        GestureDetector(
+        AppPressable(
           onTap: () {
             showModalBottomSheet(
               context: context,
@@ -890,7 +794,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildLogoutButton() {
-    return GestureDetector(
+    return AppPressable(
       onTap: _handleLogout,
       child: Container(
         width: double.infinity,
@@ -914,11 +818,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showToast(String msg) {
-    Fluttertoast.showToast(
-      msg: msg,
-      backgroundColor: const Color(0xFF2a2a5a),
-      textColor: const Color(0xFFe8e8f4),
-      toastLength: Toast.LENGTH_LONG,
-    );
+    AppToast.show(context, msg);
   }
 }

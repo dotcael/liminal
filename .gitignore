@@ -43,3 +43,22 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase debug logs (contain PII — emails, UIDs)
+firebase-debug.log
+*-debug.log
+
+# Private keys / certificates
+*.pem
+*.key
+*.p12
+
+# Firebase service account keys
+*-service-account.json
+serviceAccountKey.json
+
+# Syncthing sync conflict files
+*.sync-conflict-*
+
+# Redundant source snapshot (lib/ is the source of truth)
+lib.zip

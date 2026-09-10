@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../dev/dev_prefs.dart';
+import '../widgets/haptics.dart';
+import '../widgets/pressable.dart';
 
 
 class FeedScreen extends StatefulWidget {
@@ -151,6 +153,34 @@ class _FeedScreenState extends State<FeedScreen> {
     return DateFormat('h:mma').format(createdAt).toLowerCase();
   }
 
+  // BUG FIX (Phase B): live countdown for broadcasts that carry a real
+  // dueDateTimestamp
+  _DueState _dueStateFor(int? ts) {
+    if (ts == null) return _DueState.unknown;
+    final due = DateTime.fromMillisecondsSinceEpoch(ts);
+    final days = due.difference(DateTime.now()).inDays;
+    if (days < 0) return _DueState.overdue;
+    if (days == 0) return _DueState.today;
+    return _DueState.future;
+  }
+
+  String _dueCountdown(int? ts) {
+    final due = DateTime.fromMillisecondsSinceEpoch(ts ?? 0);
+    final now = DateTime.now();
+    final diff = due.difference(now);
+    final days = diff.inDays;
+    if (ts == null) return '';
+    if (days < 0) {
+      final late = -days;
+      return late == 1 ? 'Overdue by 1 day' : 'Overdue by $late days';
+    }
+    if (days == 0) {
+      final hours = diff.inHours;
+      return hours <= 0 ? 'Due today' : 'Due in $hours hr';
+    }
+    return days == 1 ? 'Due in 1 day' : 'Due in $days days';
+  }
+
   // converts a single Firestore document into the _FeedItem this screen
   // already knows how to render — keeps all the Firestore-specific field
   // names contained to this one function
@@ -174,6 +204,7 @@ class _FeedScreenState extends State<FeedScreen> {
       title: data['title'] as String? ?? '',
       body: data['body'] as String? ?? '',
       due: data['dueDate'] as String? ?? '',
+      dueTs: data['dueDateTimestamp'] as int?,
       // the due date badge turns the urgent color whenever the post itself
       // is urgent — there's no separate "hot" flag stored in Firestore
       dueIsHot: _parseIsUrgent(data['urgency'] as String?),
@@ -194,7 +225,6 @@ class _FeedScreenState extends State<FeedScreen> {
   // the source list now comes from the StreamBuilder snapshot each rebuild,
   // not from a stored _items field
   List<_FeedItem> _visibleItems(List<_FeedItem> items) {
-    // first pass: audience filter — devs can bypass with toggle
     final bypass = DevPrefs.bypassAudience;
     if (!bypass && !_isLoadingUser && _userDepartment != null) {
       items = items.where((item) {
@@ -207,7 +237,6 @@ class _FeedScreenState extends State<FeedScreen> {
     return items.where((item) {
       switch (_activeFilter) {
         case _FeedFilter.urgent:
-          // urgent filter shows any item flagged as urgent, across all categories
           return item.isUrgent;
 
         case _FeedFilter.academic:
@@ -266,26 +295,17 @@ class _FeedScreenState extends State<FeedScreen> {
             // something went wrong talking to Firestore (offline, rules
             // rejection, etc.) — surface it instead of pretending it's empty
             if (snapshot.hasError) {
-              final errMsg = snapshot.error.toString();
-              // BUG FIX: common dev-mode issue — auth bypassed but Firestore rules
-              // require auth. show a clearer message for that case
-              final displayMsg = errMsg.contains('permission-denied')
-                  ? 'Feed unavailable — log in required'
-                  : 'Couldn\'t load the feed';
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      displayMsg,
+                      'Couldn\'t load the feed',
                       style: TextStyle(fontSize: 13, color: _textMuted),
                     ),
-                    // BUG FIX: show the real error underneath for debugging
                     const SizedBox(height: 6),
                     Text(
-                      errMsg.length > 80
-                          ? '${errMsg.substring(0, 80)}…'
-                          : errMsg,
+                      'Please check your connection and try again',
                       style: TextStyle(fontSize: 9, color: _textDim),
                       textAlign: TextAlign.center,
                     ),
@@ -378,11 +398,17 @@ class _FeedScreenState extends State<FeedScreen> {
   // ── filter chip ───────────────────────────────────────────────────────────────
   Widget _buildFilterChip(_FeedFilter filter) {
     final isActive = _activeFilter == filter;
-    return GestureDetector(
+    return AppPressable(
+      haptic: false,
       // setState triggers a rebuild — _visibleItems recomputes with the new
       // filter against whatever the StreamBuilder's latest snapshot is
-      onTap: () => setState(() => _activeFilter = filter),
-      child: Container(
+      onTap: () {
+        Haptics.select();
+        setState(() => _activeFilter = filter);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
         margin: const EdgeInsets.only(right: 6, bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
         decoration: BoxDecoration(
@@ -393,12 +419,13 @@ class _FeedScreenState extends State<FeedScreen> {
             width: 0.5,
           ),
         ),
-        child: Text(
-          filter.label,
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
           style: TextStyle(
             fontSize: 10,
             color: isActive ? _textPrimary : _textMuted,
           ),
+          child: Text(filter.label, maxLines: 1),
         ),
       ),
     );
@@ -550,6 +577,19 @@ class _FeedScreenState extends State<FeedScreen> {
               Text(
                 item.body,
                 style: TextStyle(fontSize: 9, color: _textMuted, height: 1.5),
+              ),
+            ],
+            if (item.dueTs != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                _dueCountdown(item.dueTs),
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w500,
+                  color: _dueStateFor(item.dueTs) == _DueState.overdue
+                      ? _badgeTxtUrgent
+                      : (item.dueIsHot ? _badgeTxtUrgent : _accent),
+                ),
               ),
             ],
             if (DevPrefs.showRawIds) ...[
@@ -767,6 +807,9 @@ enum _FeedFilter {
 enum _FeedCategory { academic, financial }
 
 // ── data model ────────────────────────────────────────────────────────────────
+// BUG FIX (Phase B): urgency state for the broadcast due countdown
+enum _DueState { unknown, today, future, overdue }
+
 class _FeedItem {
   // the Firestore document id — kept around in case a future iteration adds
   // per-item actions (mark read, delete) that need to target a specific doc
@@ -778,6 +821,9 @@ class _FeedItem {
   final String title;
   final String body;
   final String due;
+  // BUG FIX (Phase B): real due timestamp so the card can show a live
+  // countdown instead of only the free-text due label. Null for legacy posts.
+  final int? dueTs;
   final bool dueIsHot;
   final String time;
   final String dateGroup;
@@ -794,6 +840,8 @@ class _FeedItem {
     required this.body,
     required this.due,
     required this.dueIsHot,
+    // BUG FIX (Phase B): dueTs defaults to null for legacy broadcasts
+    this.dueTs,
     required this.time,
     required this.dateGroup,
     // BUG FIX: audience defaults to empty — filtered out until user dept is loaded

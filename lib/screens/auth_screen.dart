@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 
 import'shell_screen.dart';
-import '../dev/dev_log.dart';
+import '../services/fcm_service.dart';
+import '../widgets/app_toast.dart';
+import '../widgets/haptics.dart';
+import '../widgets/pressable.dart';
 
 class AuthScreen extends StatefulWidget {
   //this is the constructor for the auth screen
@@ -58,18 +60,13 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose(); // calling the super method to dispose the state of the widget
   }
 
-  //Email validation for reps by (CHECKING) strictly using @ulk.ac.rw email
-  bool _isValidRepEmail(String email) {
-    return email.trim().endsWith('@ulk.ac.rw');
-  }
+  static final _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   bool _isDevEmail(String email) {
     return email.trim().endsWith('@yvl.dev');
   }
 
-  //local form validation to make sure no bs gets sent to the backend
   bool _validateForm() {
-    //trimming the email to remove any leading or trailing spaces and shares them in the class
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -78,8 +75,13 @@ class _AuthScreenState extends State<AuthScreen> {
       return false;
     }
 
-    if (!email.contains('@')) {
+    if (!_emailRegex.hasMatch(email)) {
       _showToast("Invalid email format", isError: true);
+      return false;
+    }
+
+    if (email.length > 254) {
+      _showToast("Email is too long", isError: true);
       return false;
     }
 
@@ -88,10 +90,19 @@ class _AuthScreenState extends State<AuthScreen> {
       return false;
     }
 
-    //Sign up validation
+    if (password.length > 128) {
+      _showToast("Password is too long", isError: true);
+      return false;
+    }
+
     if (!_isLoginMode) {
       if (_nameController.text.trim().isEmpty) {
         _showToast("Please enter your full name", isError: true);
+        return false;
+      }
+
+      if (_nameController.text.trim().length > 100) {
+        _showToast("Name is too long", isError: true);
         return false;
       }
 
@@ -100,10 +111,20 @@ class _AuthScreenState extends State<AuthScreen> {
         return false;
       }
 
-      // "valid address" is disclosed privately
-      if (_role == 'rep' && !_isValidRepEmail(email) && !_isDevEmail(email)) {
-        _showToast("Rep accounts require a @ulk.ac.rw email", isError: true);
+      if (_deptController.text.trim().length > 100) {
+        _showToast("Department name is too long", isError: true);
         return false;
+      }
+
+      if (_classController.text.trim().length > 50) {
+        _showToast("Class is too long", isError: true);
+        return false;
+      }
+
+      // Server-side onUserCreate function will validate and correct the role.
+      // Client can only request 'student' or 'rep' — never 'developer'.
+      if (_role != 'student' && _role != 'rep') {
+        _role = 'student';
       }
     }
 
@@ -115,12 +136,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   // app assumes its false unless called
   void _showToast(String msg, {bool isError = false}) {
-    Fluttertoast.showToast(
-      msg: msg,
-      backgroundColor: isError ? const Color(0xFF8a3a3a) : _accent,
-      textColor: _textPrimary,
-      toastLength: Toast.LENGTH_LONG, //Flutter length library defaults 3.5s
-    );
+    AppToast.show(context, msg, isError: isError);
   }
 
   // Main Authentication logic for both login and signup
@@ -141,21 +157,16 @@ class _AuthScreenState extends State<AuthScreen> {
             .doc(credential.user!.uid)
             .get();
 
-        var userRole = doc.data()?['role'] ?? 'student';
-        final userName = doc.data()?['name'] ?? 'there';
-        final email = doc.data()?['email'] as String? ?? credential.user!.email ?? '';
 
-        // auto-upgrade .yvl.dev accounts to developer
-        if (_isDevEmail(email) && userRole != 'developer') {
-          await _firestore.collection('users').doc(credential.user!.uid).update({
-            'role': 'developer',
-            'email': email,
-          });
-          userRole = 'developer';
-          DevLog.log('Dev upgrade on login', detail: email);
-        }
+// get user role from database
+        var userRole = doc.data()?['role'] ?? 'student'; 
+        final userName = doc.data()?['name'] ?? 'there';
 
         _showToast("Welcome back.");
+
+        // BUG FIX (Phase C): ensure the FCM token is registered for pushes
+        FcmService.configureListeners();
+        FcmService.ensureToken();
 
         if (mounted) {
           Navigator.pushReplacement(
@@ -171,32 +182,32 @@ class _AuthScreenState extends State<AuthScreen> {
           password: _passwordController.text.trim(),
         );
 
-        // force developer role for .yvl.dev emails
         final email = _emailController.text.trim();
-        if (_isDevEmail(email)) {
-          _role = 'developer';
-        }
 
+        // Write the user doc with the selected role.
+        // The onUserCreate Cloud Function will validate and correct it
+        // server-side based on the email domain:
+        //   @yvl.dev → developer, @ulk.ac.rw → rep, else → student
+        // The client never writes 'developer' directly.
         await _firestore.collection('users').doc(credential.user!.uid).set({
           'name': _nameController.text.trim(),
           'email': email,
-          'role': _role,
+          'role': _role == 'developer' ? 'student' : _role,
           'class': _classController.text.trim(),
           'department': _deptController.text.trim(),
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        if (_role == 'developer') {
-          DevLog.log('Dev account created', detail: email);
-          _showToast("Dev account activated! 🚀");
-        } else {
-          _showToast("Account created.");
-        }
+        _showToast("Account created.");
+
+        // BUG FIX (Phase C): register the FCM token for the new account too
+        FcmService.configureListeners();
+        FcmService.ensureToken();
 
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => ShellScreen(name: _nameController.text.trim(), role: _role)),
+            MaterialPageRoute(builder: (context) => ShellScreen(name: _nameController.text.trim(), role: 'student')),
           );
         }
       }
@@ -267,6 +278,10 @@ class _AuthScreenState extends State<AuthScreen> {
     //password dotting if ticked (true)
     bool obscure = false,
     TextInputType keyboard = TextInputType.text,
+
+    // BUG FIX: iOS autofill — email/password/name fields declare their hints
+    // so Safari/Keychain autofill offers to fill (and later, save) credentials
+    List<String>? autofillHints,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,6 +305,10 @@ class _AuthScreenState extends State<AuthScreen> {
             controller: controller,
             obscureText: obscure,
             keyboardType: keyboard,
+            // BUG FIX: iOS autofill hints (email/password/name)
+            autofillHints: autofillHints,
+            autocorrect: obscure ? false : true,
+            enableSuggestions: !obscure,
             style: const TextStyle(fontSize: 13, color: _textPrimary),
          decoration: const InputDecoration(
   border: InputBorder.none,
@@ -335,18 +354,24 @@ class _AuthScreenState extends State<AuthScreen> {
                 label: 'Email',
                 controller: _emailController,
                 keyboard: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.username, AutofillHints.email],
               ),
               const SizedBox(height: 14),
               _buildField(
                 label: 'Password',
                 controller: _passwordController,
                 obscure: true,
+                autofillHints: const [AutofillHints.password],
               ),
 
               //sign up mode
               if (!_isLoginMode) ...[
                 const SizedBox(height: 14),
-                _buildField(label: 'Full name', controller: _nameController),
+                _buildField(
+                  label: 'Full name',
+                  controller: _nameController,
+                  autofillHints: const [AutofillHints.name],
+                ),
                 const SizedBox(height: 14),
                 // Class is optional for reps — label reflects this
                 _buildField(
@@ -400,9 +425,15 @@ class _AuthScreenState extends State<AuthScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _role = 'student'),
-                            child: Container(
+                          child: AppPressable(
+                            haptic: false,
+                            onTap: () {
+                              Haptics.select();
+                              setState(() => _role = 'student');
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOut,
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
                                 color: _role == 'student'
@@ -425,9 +456,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _role = 'rep'),
-                            child: Container(
+                          child: AppPressable(
+                            haptic: false,
+                            onTap: () {
+                              Haptics.select();
+                              setState(() => _role = 'rep');
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOut,
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
                                 color: _role == 'rep'
@@ -458,7 +495,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
               //submit button
               //if it is loading and gets tapped do nothing else handle submit
-              GestureDetector(
+              AppPressable(
                 onTap: _isLoading ? null : _handleSubmit,
                 child: Container(
                   width: double.infinity,
@@ -494,8 +531,12 @@ class _AuthScreenState extends State<AuthScreen> {
 
               //toggle login or signup
               Center(
-                child: GestureDetector(
-                  onTap: () => setState(() => _isLoginMode = !_isLoginMode),
+                child: AppPressable(
+                  haptic: false,
+                  onTap: () {
+                    Haptics.select();
+                    setState(() => _isLoginMode = !_isLoginMode);
+                  },
                   child: RichText(
                     text: TextSpan(
                       style: const TextStyle(

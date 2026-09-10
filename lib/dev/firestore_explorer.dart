@@ -112,7 +112,7 @@ class _FirestoreExplorerState extends State<FirestoreExplorer> {
           return const Center(child: CircularProgressIndicator(color: Color(0xFF4a4aaa)));
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(fontSize: 10, color: Color(0xFFd87a5a))));
+          return Center(child: Text('Failed to load documents', style: const TextStyle(fontSize: 10, color: Color(0xFFd87a5a))));
         }
 
         final docs = snapshot.data?.docs ?? [];

@@ -2,14 +2,25 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../dev/dev_prefs.dart';
+import '../services/notification_service.dart';
+import '../services/reminder_prefs.dart';
+import '../widgets/app_toast.dart';
+import '../widgets/date_time_sheet.dart';
+import '../widgets/haptics.dart';
+import '../widgets/pressable.dart';
+import '../widgets/reminder_slider.dart';
+import 'settings_screen.dart';
 
 enum _Urgency {urgent, soon , later}
+
+// BUG FIX: smart views (iPhone Reminders-style) that filter the personal task
+// list on top of the urgency groups: All / Today / Scheduled
+enum _ViewFilter { all, today, scheduled }
 
 class HomeScreen extends StatefulWidget{
 
@@ -45,6 +56,9 @@ class _HomeScreenState extends State<HomeScreen>{
   //load tasks from local storage
   List<Map<String, dynamic>> _tasks= [];
 
+  // BUG FIX: active smart-view filter (Today / Scheduled / All)
+  _ViewFilter _viewFilter = _ViewFilter.all;
+
   //loader
   bool _isLoading = true;
 
@@ -74,10 +88,21 @@ final decoded = jsonDecode(raw) as List<dynamic>;
 setState((){
 _tasks = decoded.cast<Map<String,dynamic>>();
 for (final task in _tasks) {
-  task['urgency'] = _computeUrgency(task['dueDateTimestamp'] as int?).name;
+  // BUG FIX: only re-derive urgency from the due date for auto tasks;
+  // manual override choices are preserved as stored
+  if (task['urgencyManual'] != true) {
+    task['urgency'] = _urgencyString(_computeUrgency(task['dueDateTimestamp'] as int?));
+  }
 }
 
 });
+
+// Re-sync local reminders for uncompleted, not-yet-due tasks after a restart.
+// cancelTaskReminders() runs first inside scheduleTaskReminders(), so pending
+// reminders are idempotent — never duplicated across app launches.
+for (final task in _tasks) {
+  await _scheduleReminders(task);
+}
 
 
 }
@@ -90,11 +115,13 @@ await prefs.setString(_storageKey, jsonEncode(_tasks));
   }
 
 //convert urgency string n local storge to enum
+// BUG FIX: case-insensitive — legacy stored values from _computeUrgency(...).name
+// were lowercase ('urgent'/'soon'/'later') and silently fell through to _later
 
 _Urgency _parseUrgency (String? value){
-switch (value){
-  case 'Urgent' : return _Urgency.urgent;
-  case 'Soon' : return _Urgency.soon;
+switch (value?.trim().toLowerCase()){
+  case 'urgent' : return _Urgency.urgent;
+  case 'soon' : return _Urgency.soon;
   default : return _Urgency.later;
 }
 
@@ -102,7 +129,9 @@ switch (value){
 
 //deletion. takss gets removed (using its id) and redrawn first, 
 // then _saveTasks updates the local storage in the background
+
 Future<void> _deleteTask(String id) async{
+await NotificationService.cancelTaskReminders(id);
 setState((){
 _tasks.removeWhere((task) => task['id'] == id);
 
@@ -132,6 +161,8 @@ Future<void> _toggleCompletion(String id) async {
       }
     });
     await _saveTasks();
+    // un-completing before the 3s window: reminders come back
+    await _scheduleReminders(_tasks.firstWhere((t) => t['id'] == id));
     return;
   }
 
@@ -145,6 +176,8 @@ Future<void> _toggleCompletion(String id) async {
       }
     });
     await _saveTasks();
+    // task is done — stop nagging about it
+    await NotificationService.cancelTaskReminders(id);
 
     final messenger = ScaffoldMessenger.of(context);
 
@@ -174,6 +207,7 @@ Future<void> _toggleCompletion(String id) async {
                 _tasks.insert(0, removedTask);
               });
               _saveTasks();
+              _scheduleReminders(removedTask);
             },
           ),
         ),
@@ -187,13 +221,19 @@ Future<void> _toggleCompletion(String id) async {
       }
     });
     await _saveTasks();
+    // task pulled back out of completed state — reminders return
+    await _scheduleReminders(_tasks.firstWhere((t) => t['id'] == id));
   }
 }
 
 //called by upload sheet
 Future<void> _addTask(Map<String,dynamic> task) async{
-  final timestamp = task['dueDateTimestamp'] as int?;
-  task['urgency'] = _computeUrgency(timestamp).name;
+  // BUG FIX: only auto-assign urgency from the due date for auto tasks;
+  // a manual override selection is kept as chosen in the upload sheet
+  if (task['urgencyManual'] != true) {
+    final timestamp = task['dueDateTimestamp'] as int?;
+    task['urgency'] = _urgencyString(_computeUrgency(timestamp));
+  }
 
   setState((){
 
@@ -202,6 +242,27 @@ _tasks.insert(0,task);
  });
 
  await _saveTasks(); //to save it so it stays when the app is restarted
+ await _scheduleReminders(task);
+}
+
+/// Schedules local reminders (pre-reminder + due time) for a task, honoring
+/// the master switch, the user's default offset, and a per-task override.
+/// Reminders cancel themselves for tasks with no due date or already done.
+Future<void> _scheduleReminders(Map<String, dynamic> task) async {
+  if (!ReminderPrefs.enabled) return;
+  if (task['isCompleted'] == true) return;
+  final ts = task['dueDateTimestamp'] as int?;
+  if (ts == null) return;
+
+  final override = task['preReminderMinutes'] as int?;
+  final pre = override ?? ReminderPrefs.preReminderMinutes;
+
+  await NotificationService.scheduleTaskReminders(
+    taskId: task['id'] as String,
+    taskName: task['taskName'] as String? ?? 'Task',
+    dueDate: DateTime.fromMillisecondsSinceEpoch(ts),
+    preReminderMinutes: pre,
+  );
 }
 
 @override
@@ -238,11 +299,19 @@ _Urgency _computeUrgency(int? dueDateTimestamp) {
   if (dueDateTimestamp == null) return _Urgency.later;
   final remaining = DateTime.fromMillisecondsSinceEpoch(dueDateTimestamp)
       .difference(DateTime.now())
-      .inDays;
-  if (remaining <= 1) return _Urgency.urgent;
-  if (remaining <= 3) return _Urgency.soon;
+      .inHours;
+  if (remaining <= 24) return _Urgency.urgent;
+  if (remaining <= 72) return _Urgency.soon;
   return _Urgency.later;
 }
+
+// BUG FIX: canonical capitalized labels so stored values always match the
+// chip options and _parseUrgency (no more lowercase 'urgent'/'soon' values)
+String _urgencyString(_Urgency urgency) => switch (urgency) {
+  _Urgency.urgent => 'Urgent',
+  _Urgency.soon => 'Soon',
+  _Urgency.later => 'Later',
+};
 
 String _daysRemaining(int? dueDateTimestamp) {
   if (dueDateTimestamp == null) return '';
@@ -268,7 +337,9 @@ int urgentCount = 0;
 int soonCount = 0;
 int laterCount = 0;
 
-for (final task in _tasks){
+final visibleTasks = _filteredTasks();
+
+for (final task in visibleTasks){
 final urgency = _parseUrgency(task['urgency'] as String?);
 if(urgency == _Urgency.urgent) urgentCount++;
 else if (urgency == _Urgency.soon) soonCount++;
@@ -277,42 +348,46 @@ else laterCount++;
 
 return Column(
   children: [_buildHeader(urgentCount, soonCount, laterCount),
+  _buildViewFilterRow(),
 
-  Expanded(child: _tasks.isEmpty ? _buildEmptyState() : SingleChildScrollView(
+  Expanded(child: visibleTasks.isEmpty ? _buildEmptyState() : SingleChildScrollView(
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [ 
  // each section only renders if it has tasks
 // if urgentCount is 0 the entire urgent block is skipped
                        if (urgentCount > 0) ...[
-_buildSectionLabel('Urgent'), ..._tasks.where((task)=> _parseUrgency(task['urgency']
+_buildSectionLabel('Urgent'), ...visibleTasks.where((task)=> _parseUrgency(task['urgency']
 as String?) == _Urgency.urgent).map((task) => _buildDismissibleCard(taskId: task['id'] as String,
 title: task['taskName'] as String? ?? '', meta: task['dueDate'] as String? ?? '', urgency: _Urgency.urgent,
 isCompleted: task['isCompleted'] as bool? ?? false,
+notes: task['notes'] as String?,
 dueDateTimestamp: task['dueDateTimestamp'] as int?)),
 
                        ],
                        if (soonCount > 0) ...[
                          _buildSectionLabel('Up next'),
-                         ..._tasks.where((task)=> _parseUrgency(task['urgency'] as String?) == _Urgency.soon).map((task)
+                         ...visibleTasks.where((task)=> _parseUrgency(task['urgency'] as String?) == _Urgency.soon).map((task)
                          => _buildDismissibleCard(
                            taskId: task['id'] as String,
                          title: task['taskName'] as String? ??'',
                          meta: task['dueDate'] as String? ??'',
                          urgency: _Urgency.soon,
                          isCompleted: task['isCompleted'] as bool? ?? false,
+                         notes: task['notes'] as String?,
                          dueDateTimestamp: task['dueDateTimestamp'] as int?,
                          )),
                        ],
 
                        if(laterCount > 0) ...[
-                         _buildSectionLabel('Later'), ..._tasks.where((task)=>
+                         _buildSectionLabel('Later'), ...visibleTasks.where((task)=>
                           _parseUrgency(task['urgency'] as String?) == _Urgency.later).map((task) => _buildDismissibleCard(
                            taskId: task['id'] as String,
                            title: task['taskName'] as String? ??'',
                            meta: task['dueDate'] as String? ?? '',
                            urgency: _Urgency.later,
                            isCompleted: task['isCompleted'] as bool? ?? false,
+                           notes: task['notes'] as String?,
                            dueDateTimestamp: task['dueDateTimestamp'] as int?,
 
                           )),
@@ -326,7 +401,76 @@ dueDateTimestamp: task['dueDateTimestamp'] as int?)),
   ), ),
 ],);
 
+}// BUG FIX: smart-view filtering. Today = due today or overdue (missed items
+// shouldn't vanish), Scheduled = has a due date at all, All = everything.
+List<Map<String, dynamic>> _filteredTasks() {
+  final now = DateTime.now();
+  final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+  return _tasks.where((task) {
+    if (task['isCompleted'] == true) return false;
+    if (_viewFilter == _ViewFilter.all) return true;
+    final ts = task['dueDateTimestamp'] as int?;
+    if (ts == null) return false;
+    if (_viewFilter == _ViewFilter.today) {
+      return !DateTime.fromMillisecondsSinceEpoch(ts).isAfter(endOfToday);
+    }
+    return true; // scheduled
+  }).toList();
+}
 
+// BUG FIX: compact smart-view switcher (All / Today / Scheduled) styled like
+// the rest of the pills — 3 always-visible options beat a dropdown here
+Widget _buildViewFilterRow() {
+  const options = [
+    (label: 'All', filter: _ViewFilter.all),
+    (label: 'Today', filter: _ViewFilter.today),
+    (label: 'Scheduled', filter: _ViewFilter.scheduled),
+  ];
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(18, 2, 18, 4),
+    child: Row(
+children: options.map((o) {
+  final selected = _viewFilter == o.filter;
+  return Expanded(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+    child: AppPressable(
+      haptic: false,
+      onTap: () {
+        Haptics.select();
+        setState(() => _viewFilter = o.filter);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF2a2a5a) : _bg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? _accent : const Color(0xFF3a3a6a),
+            width: 0.5,
+          ),
+        ),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          style: TextStyle(
+            fontSize: 10,
+            color: selected ? const Color(0xFFa0a0ee) : _textSecondary,
+          ),
+          child: Text(
+            o.label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+          ),
+        ),
+      ),
+    ),
+    ),
+  );
+}).toList(),
+    ),
+  );
 }
 
 // renders a swipeable wrapper around a task card — swiping left reveals a red
@@ -334,7 +478,7 @@ dueDateTimestamp: task['dueDateTimestamp'] as int?)),
 
 // BUG FIX: added isCompleted so the checkbox + dimmed styling works on the card
 Widget _buildDismissibleCard({required String taskId, required String title, 
-required String meta, required _Urgency urgency, required bool isCompleted, int? dueDateTimestamp,}) {
+required String meta, required _Urgency urgency, required bool isCompleted, String? notes, int? dueDateTimestamp,}) {
   return Dismissible(
 //uses the key to id whichc card to delete
 
@@ -356,18 +500,44 @@ child: const Icon(Icons.delete_outline,color: Color(0xFFe8e8f4), size: 20),
 
 ),
 
-//called when user lifts finget after swipe.true confirms deletion, false snaps the card back
+//called when user lifts finger after swipe.true confirms deletion, false snaps the card back
+
+// BUG FIX: deletion moved from confirmDismiss into onDismissed so we can offer
+// undo — the task still exists until the fly-away animation actually completes
 confirmDismiss: (direction) async{
-await _deleteTask(taskId); //delete locally
-return true;
+  Haptics.warning();
+  return true;
 },
 
-//for further actions like undo
-// BUG FIX: was `onDismissed(direction){}` — that's a method definition, not a named parameter
-// named parameters use a colon, not parens: onDismissed: (direction) {}
-onDismissed: (direction) {},
+//fires after the card flies away — delete, then offer undo via snackbar
+onDismissed: (direction) async {
+  final idx = _tasks.indexWhere((task) => task['id'] == taskId);
+  if (idx == -1) return;
+  final removedTask = Map<String, dynamic>.from(_tasks[idx]);
+
+  await _deleteTask(taskId);
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('Deleted "$title"'),
+      duration: const Duration(seconds: 4),
+      action: SnackBarAction(
+        label: 'Undo',
+        onPressed: () {
+          setState(() {
+            _tasks.insert(0, removedTask);
+          });
+          _saveTasks();
+          _scheduleReminders(removedTask);
+        },
+      ),
+    ),
+  );
+},
 
 child: _buildTaskCard(taskId: taskId, title: title, meta : meta, urgency: urgency, isCompleted: isCompleted,
+notes: notes,
 dueDateTimestamp: dueDateTimestamp,),
   );
 }
@@ -380,8 +550,23 @@ padding : const EdgeInsets.fromLTRB(18,14,18,10),
 decoration:  BoxDecoration(border: Border(bottom: BorderSide(color: _border, width: 0.5)),
 ),
 child : Column(crossAxisAlignment: CrossAxisAlignment.start,children: [
-Text('${_getGreeting()}, ${widget.name}',
-style:  TextStyle(fontSize:20, fontWeight: FontWeight.w500, color : _textPrimary,),),
+Row(children:[
+Expanded(child: Text('${_getGreeting()}, ${widget.name}',
+style:  TextStyle(fontSize:20, fontWeight: FontWeight.w500, color : _textPrimary,),)),
+AppPressable(
+  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen())),
+  child: Container(
+    width: 32,
+    height: 32,
+    decoration: BoxDecoration(
+      color: _surface,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: _border, width: 0.5),
+    ),
+    child: const Icon(Icons.settings_outlined, size: 16, color: Color(0xFF8888dd)),
+  ),
+),
+]),
 const SizedBox(height: 7),
 
 Row(children:[
@@ -440,7 +625,7 @@ Color(0xFF4a4a6a)),),
 // renders a single task card with a colored left border that reflects urgency,
 // a title, a due date string (meta), a days-remaining label, and a badge pill
 Widget _buildTaskCard({required String taskId, required String title, required String meta,
- required _Urgency urgency, required bool isCompleted, int? dueDateTimestamp,}){
+ required _Urgency urgency, required bool isCompleted, String? notes, int? dueDateTimestamp,}){
 
 final borderColor = switch(urgency){
   _Urgency.urgent => const Color(0xFFd85a30),
@@ -468,10 +653,22 @@ child : ClipRRect(
 border: Border(left: BorderSide(color: isCompleted ? const Color(0xFF3a3a3a) : borderColor, width : 4)),
 ), child : Row(
 crossAxisAlignment: CrossAxisAlignment.start, children : [
-// BUG FIX: completion toggle circle
-GestureDetector(
-  onTap: () => _toggleCompletion(taskId),
-  child: Container(
+// BUG FIX: completion toggle circle — animated + haptic so completing a task
+// actually *feels* like checking something off
+AppPressable(
+  haptic: false,
+  pressedScale: 0.8,
+  onTap: () {
+    if (!isCompleted) {
+      Haptics.success();
+    } else {
+      Haptics.tap();
+    }
+    _toggleCompletion(taskId);
+  },
+  child: AnimatedContainer(
+    duration: const Duration(milliseconds: 200),
+    curve: Curves.easeOut,
     width: 18, height: 18,
     margin: const EdgeInsets.only(right: 10, top: 1),
     decoration: BoxDecoration(
@@ -482,9 +679,12 @@ GestureDetector(
         width: 1.5,
       ),
     ),
-    child: isCompleted
-        ? const Icon(Icons.check, size: 12, color: Color(0xFF5abba0))
-        : null,
+    child: AnimatedScale(
+      scale: isCompleted ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutBack,
+      child: const Icon(Icons.check, size: 12, color: Color(0xFF5abba0)),
+    ),
   ),
 ),
 Expanded(child: Column(
@@ -497,12 +697,21 @@ TextStyle(
 
 const SizedBox(height: 4),
 
-  // meta is the due date string the user typed
+// meta is the due date string the user typed
 
   Text(meta, style: TextStyle(
-    fontSize:10.5,
+    fontSize: 10.5,
     color : isCompleted ? const Color(0xFF3a3a5a) : _textSecondary,
   ),),
+  if (notes != null && notes.trim().isNotEmpty && !isCompleted) ...[
+    const SizedBox(height: 3),
+    Text(
+      notes.trim(),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 9.5, color: isCompleted ? const Color(0xFF3a3a5a) : _textSecondary, height: 1.4),
+    ),
+  ],
   if (dueDateTimestamp != null && !isCompleted) ...[
     const SizedBox(height: 3),
     Text(_daysRemaining(dueDateTimestamp), style: TextStyle(
@@ -548,6 +757,7 @@ child: Text(
  Widget _buildFab(BuildContext context){
   return FloatingActionButton(
 onPressed:() async {
+Haptics.tap();
 
 final newTask = await showModalBottomSheet<Map<String, dynamic>>(
   context : context, isScrollControlled: true, backgroundColor: Colors.transparent,
@@ -624,6 +834,7 @@ bool _isSubmitting = false;
 
 final _taskNameController = TextEditingController();
 final _taskDueDateController = TextEditingController();
+final _notesController = TextEditingController();
 final _titleController = TextEditingController();
 final _bodyController = TextEditingController();
 final _sourceController = TextEditingController();
@@ -631,6 +842,27 @@ final _broadcastDueDateController = TextEditingController();
 
 DateTime? _pickedDate;
 String? _selectedUrgency;
+// BUG FIX: broadcast due date (Phase B) — real timestamp so announcements
+// carry actual timing instead of free-text "Wednesday"
+DateTime? _pickedBroadcastDate;
+// BUG FIX: manual override toggle — when false (default) urgency is derived
+// from the picked due date; when true the chips drive the stored badge
+bool _manualUrgency = false;
+
+// BUG FIX: per-task reminder override — null means "use the Profile default",
+// 0 means off for this task, otherwise a custom pre-reminder in minutes
+int? _overrideMinutes;
+
+// BUG FIX: auto urgency derived from the picked due date+time (mirrors
+// _computeUrgency): due within 24h is Urgent, within 72h is Soon, else Later
+String get _autoUrgency {
+  final picked = _pickedDate;
+  if (picked == null) return 'Later';
+  final remaining = picked.difference(DateTime.now()).inHours;
+  if (remaining <= 24) return 'Urgent';
+  if (remaining <= 72) return 'Soon';
+  return 'Later';
+}
 // BUG FIX: default didn't match the new audience chip options below — no chip
 // would show as selected on first open. Defaulting to the first option instead.
 String _selectedAudience = 'Software Engineering';
@@ -641,6 +873,7 @@ String _selectedCategory = 'Academic';
 void dispose(){
   _taskNameController.dispose();
 _taskDueDateController.dispose();
+_notesController.dispose();
 _titleController.dispose();
 _bodyController.dispose();
 _sourceController.dispose();
@@ -712,17 +945,32 @@ return Container(
 }
 
 Widget _buildTab(String label, {required int index}){
-  final isActive = _activeTab == index; // activeTab is 0 
-  return Expanded(child: GestureDetector(onTap:() => setState((){_activeTab = index;
+  final isActive = _activeTab == index; // activeTab is 0
+  return Expanded(child: AppPressable(
+  haptic: false,
+  onTap:(){
+  Haptics.select();
+  setState((){_activeTab = index;
   //reset urgency selection when switching tabs
   _selectedUrgency = null;
   _pickedDate = null;
-  
-  }), child:  Container(padding:const EdgeInsets.symmetric(vertical:7), decoration : 
+  _pickedBroadcastDate = null;
+  _overrideMinutes = null;
+  });
+  },
+  child:  AnimatedContainer(padding:const EdgeInsets.symmetric(vertical:7), duration: const Duration(milliseconds: 180),
+  curve: Curves.easeOut,
+  decoration :
   BoxDecoration(color : isActive? const Color (0xFF3a3a7a) : Colors.transparent,
   borderRadius : BorderRadius.circular(8),),
-  child: Text(label, textAlign: TextAlign.center, style : TextStyle(fontSize: 11, color: 
-  isActive? _textPrimary  : _textMuted,),),),),);
+  child: AnimatedDefaultTextStyle(
+  duration: const Duration(milliseconds: 180),
+  style: TextStyle(fontSize: 11, color:
+  isActive? _textPrimary  : _textMuted),
+  child: Text(label, textAlign: TextAlign.center, maxLines: 1),
+  ),
+  ),
+  ),);
 }
 
 // BUG FIX: this used to contain the broadcast fields (title/body/source/etc) —
@@ -733,6 +981,57 @@ return Column(crossAxisAlignment : CrossAxisAlignment.start, children : [
   _buildField('Task name', _taskNameController),
   const SizedBox(height: 10),
   _buildDateField(),
+  const SizedBox(height: 10),
+  _buildReminderPicker(),
+  const SizedBox(height: 10),
+  _buildField('Notes', _notesController, hint: 'Add details (optional)', tall: true),
+],);
+}
+
+// BUG FIX: per-task pre-reminder override via slider. "Default" follows the
+// Profile > Settings default; 0 = off for this task; otherwise a custom
+// pre-reminder in minutes (0–120, 5-min steps).
+Widget _buildReminderPicker(){
+final isDefault = _overrideMinutes == null;
+final minutes = _overrideMinutes ?? ReminderPrefs.preReminderMinutes;
+return Column(crossAxisAlignment : CrossAxisAlignment.start, children : [
+Row(children:[
+_buildLabel('Remind me'),
+const Spacer(),
+AppPressable(
+  haptic: false,
+  onTap: () {
+    Haptics.select();
+    setState(() => _overrideMinutes = null);
+  },
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: isDefault ? const Color(0xFF2a2a5a) : _bg,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(
+        color: isDefault ? _accent : const Color(0xFF3a3a6a),
+        width: 0.5,
+      ),
+    ),
+    child: Text(
+      'Default (${ReminderPrefs.preReminderMinutes}min)',
+      style: TextStyle(
+        fontSize: 9,
+        color: isDefault ? const Color(0xFFa0a0ee) : _textMuted,
+      ),
+    ),
+  ),
+),
+]),
+const SizedBox(height: 6),
+ReminderSlider(
+  minutes: minutes,
+  accent: _accent,
+  border: const Color(0xFF3a3a6a),
+  textMuted: _textMuted,
+  onChanged: (m) => setState(() => _overrideMinutes = m),
+),
 ],);
 }
 
@@ -741,7 +1040,7 @@ return Column(crossAxisAlignment : CrossAxisAlignment.start, children : [
 Widget _buildDateField(){
 return Column(crossAxisAlignment : CrossAxisAlignment.start, children : [
 _buildLabel('Due date'), const SizedBox(height: 5),
-GestureDetector(
+AppPressable(
   onTap: _pickDate,
   child: Container(
     decoration: BoxDecoration(color: _bg,
@@ -768,23 +1067,74 @@ GestureDetector(
 
 Future<void> _pickDate() async {
 final now = DateTime.now();
-final picked = await showDatePicker(
-context: context,
-initialDate: now,
-firstDate: now,
-lastDate: DateTime(now.year + 5),
+// one adaptive popup instead of two chained Material dialogs —
+// Cupertino wheel sheet on iOS, themed M3 pickers on Android/Quest
+final picked = await showAdaptiveDateTimePicker(
+context,
+initial: _pickedDate ?? now,
+first: now,
+title: 'Due date',
+);
+if(picked == null || !mounted) return;
+
+setState(() {
+_pickedDate = picked;
+// BUG FIX: only auto-assign urgency from the date in auto mode;
+// a manual chip choice is never overwritten by picking a date
+if(!_manualUrgency){
+final remaining = picked.difference(now).inHours;
+if (remaining <= 24) _selectedUrgency = 'Urgent';
+else if (remaining <= 72) _selectedUrgency = 'Soon';
+else _selectedUrgency = 'Later';
+}
+_taskDueDateController.text =
+DateFormat('EEE, MMM d · h:mma').format(picked).toLowerCase();
+});
+}
+
+// BUG FIX: broadcast due-date picker (Phase B) — mirrors the personal date
+// field but keeps its own selected timestamp
+Widget _buildBroadcastDateField(){
+return Column(crossAxisAlignment : CrossAxisAlignment.start, children : [
+_buildLabel('Due date'), const SizedBox(height: 5),
+AppPressable(
+  onTap: _pickBroadcastDate,
+  child: Container(
+    decoration: BoxDecoration(color: _bg,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: const Color(0xFF3a3a6a), width: 0.5),
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    child: Row(children: [
+      Expanded(child: Text(
+        _broadcastDueDateController.text.isEmpty
+          ? 'Pick a date'
+          : _broadcastDueDateController.text,
+        style: TextStyle(
+          fontSize: 11,
+          color: _broadcastDueDateController.text.isEmpty
+            ? const Color(0xFF4a4a6a) : _textPrimary,
+        ),
+      )),
+      const Icon(Icons.calendar_today, size: 14, color: Color(0xFF4a4a6a)),
+    ],),
+  ),
+),],);
+}
+
+Future<void> _pickBroadcastDate() async {
+final now = DateTime.now();
+final picked = await showAdaptiveDateTimePicker(
+context,
+initial: _pickedBroadcastDate ?? now,
+first: now,
+dateOnly: true,
+title: 'Due date',
 );
 if(picked != null && mounted){
-final dueAtMidnight = DateTime(picked.year, picked.month, picked.day);
-final remaining = dueAtMidnight.difference(now).inDays;
-String? urgency;
-if (remaining <= 1) urgency = 'Urgent';
-else if (remaining <= 3) urgency = 'Soon';
-else urgency = 'Later';
 setState(() {
-_pickedDate = dueAtMidnight;
-_selectedUrgency = urgency;
-_taskDueDateController.text = DateFormat('EEE, MMM d').format(picked);
+_pickedBroadcastDate = picked;
+_broadcastDueDateController.text = DateFormat('EEE, MMM d').format(picked);
 });
 }
 }
@@ -803,9 +1153,10 @@ return Column(crossAxisAlignment : CrossAxisAlignment.start, children : [
      // BUG FIX: was _sourceTitleController (undefined) — actual controller is _sourceController
      Expanded(child: _buildField('Source', _sourceController, hint: 'e.g Mr Musa · CS '),),
    const SizedBox(width : 8), 
-   // BUG FIX: was _broadcastdueDateController (lowercase d) — actual controller is _broadcastDueDateController
-   Expanded(child: _buildField('Due date', _broadcastDueDateController, hint: 'e.g Wednesday'),
-   ),],),
+   // BUG FIX: broadcast due date is now a real date picker (Phase B) instead
+   // of free text, so announcements carry a true dueDateTimestamp
+   Expanded(child: _buildBroadcastDateField()),
+   ],),
    
    
    const SizedBox (height : 10), _buildLabel('Target audience'), const SizedBox(height: 6),
@@ -845,10 +1196,18 @@ final options = ['Software Engineering', 'Networking', 'Database', 'All dept.'];
 return Wrap(spacing: 6, children: options.map((option){
 final isSelected = _selectedAudience == option;
 
-return GestureDetector(onTap: () => setState(()=> _selectedAudience = option),
+return AppPressable(
+haptic: false,
+onTap: () {
+Haptics.select();
+setState(()=> _selectedAudience = option);
+},
 
 // BUG FIX: was `const Edgeinsets.symmetric` — class name is EdgeInsets (capital I)
-child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+child: AnimatedContainer(
+  duration: const Duration(milliseconds: 180),
+  curve: Curves.easeOut,
+  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
 decoration: BoxDecoration(color: isSelected ? const Color(0xFF2a2a5a) : _bg, 
 borderRadius: BorderRadius.circular(20), border:
  Border.all(color: isSelected ? _accent : const Color(0xFF3a3a6a), width: 0.5),), 
@@ -867,10 +1226,18 @@ final options=['Academic', 'Financial'];
 return Wrap(spacing: 6, children:  options.map((option){
 final isSelected = option == _selectedCategory;
 
-return GestureDetector(onTap:() => setState(() => _selectedCategory = option),
+return AppPressable(
+haptic: false,
+onTap: () {
+Haptics.select();
+setState(() => _selectedCategory = option);
+},
 
 // BUG FIX: was `child Container(` — missing the colon after the named parameter `child`
-child: Container( padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10 ),
+child: AnimatedContainer(
+  duration: const Duration(milliseconds: 180),
+  curve: Curves.easeOut,
+  padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10 ),
 decoration: BoxDecoration(color: isSelected ? const Color(0xFF2a2a5a) : _bg,
 borderRadius: BorderRadius.circular(20), border: Border.all(
   color: isSelected ? _accent : const Color(0xFF3a3a6a), width: 0.6),
@@ -884,7 +1251,17 @@ child: Text(option, style: TextStyle(fontSize: 10,
 
 Widget _buildUrgencyPicker(){
 return Column(crossAxisAlignment: CrossAxisAlignment.start, children:
- [_buildLabel('Urgency'),
+ [Row(children:[
+   _buildLabel('Urgency'),
+   const Spacer(),
+   const Text('Auto', style: TextStyle(fontSize: 10, color: Color(0xFF4a4a6a))),
+   Switch(
+     value: _manualUrgency,
+     onChanged: (v) => setState(() => _manualUrgency = v),
+     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+   ),
+   const Text('Manual', style: TextStyle(fontSize: 10, color: Color(0xFF4a4a6a))),
+ ]),
 const SizedBox(height: 6), Row(children:[
     //label, border color, bg color
  _buildUrgencyChip('Urgent', _colorUrgent, const Color(0xFF2a1a1a)),
@@ -902,10 +1279,21 @@ const SizedBox(height: 6), Row(children:[
 Widget _buildUrgencyChip(String label, Color borderColor, Color bgColor){
 final isSelected = _selectedUrgency == label;
 
-return GestureDetector(
-
-onTap: ()=> setState(()=> _selectedUrgency = label),
-child: Container(padding: const EdgeInsets.symmetric(vertical: 5, horizontal:12),
+return AppPressable(
+haptic: false,
+onTap: (){
+  Haptics.select();
+  setState((){
+  // BUG FIX: tapping a chip in auto mode switches to manual override so the
+  // chosen urgency is actually respected instead of being auto-assigned later
+  _manualUrgency = true;
+  _selectedUrgency = label;
+  });
+},
+child: AnimatedContainer(
+  duration: const Duration(milliseconds: 180),
+  curve: Curves.easeOut,
+  padding: const EdgeInsets.symmetric(vertical: 5, horizontal:12),
 //bgColor gets passed in
 decoration: BoxDecoration(color: isSelected ? bgColor : _bg,
  // BUG FIX: was `BorderRadius.circlar` — should be `circular`
@@ -924,18 +1312,28 @@ Widget _buildSubmitButton(){
 
 final isPersonal = _activeTab == 0;
 
-return GestureDetector(
-
-onTap: _isSubmitting ? null : _handleSubmit,
-child : Container (
+return AppPressable(
+haptic: false,
+onTap: _isSubmitting ? null : () {
+  Haptics.tap();
+  _handleSubmit();
+},
+child : AnimatedContainer (
+  duration: const Duration(milliseconds: 180),
+  alignment: Alignment.center,
 width : double.infinity, padding: const EdgeInsets.symmetric(vertical: 11),
 decoration: BoxDecoration(
 //dim when submitting
-color : _isSubmitting ? const Color(0xFF2a2a5a) : _accent, 
+color : _isSubmitting ? const Color(0xFF2a2a5a) : _accent,
 borderRadius: BorderRadius.circular(10),
 ),
 
-child : Text(_isSubmitting ? 'Sending' : isPersonal ? 'Add Task' : 'Broadcast',
+child : _isSubmitting
+  ? const SizedBox(
+      width: 14, height: 14,
+      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFe8e8f4)),
+    )
+  : Text(isPersonal ? 'Add Task' : 'Broadcast',
 textAlign : TextAlign.center, style: TextStyle(fontSize:12, fontWeight : FontWeight.w500,
 color : _textPrimary,),
 ),
@@ -952,17 +1350,42 @@ if(_taskNameController.text.trim().isEmpty){
 _showToast('Task name field can not be empty', isError: true);
 return;
 }
+if(_taskNameController.text.trim().length > 200){
+_showToast('Task name is too long (max 200 chars)', isError: true);
+return;
+}
   } else{
+if(!_canBroadcast){
+  _showToast('Only reps can broadcast announcements', isError: true);
+  return;
+}
 if(_titleController.text.trim().isEmpty){
   _showToast('Title field can not be empty', isError: true);
   return;
 }
+if(_titleController.text.trim().length > 200){
+  _showToast('Title is too long (max 200 chars)', isError: true);
+  return;
+}
+if(_bodyController.text.trim().length > 2000){
+  _showToast('Body is too long (max 2000 chars)', isError: true);
+  return;
+}
+if(_sourceController.text.trim().length > 100){
+  _showToast('Source is too long (max 100 chars)', isError: true);
+  return;
+}
   }
 
- if(_selectedUrgency == null){
-_showToast('Urgency level must be selected', isError: true);
+ // BUG FIX: a chip is only required when overriding manually — in auto mode
+ // the urgency comes from the picked due date (defaults to 'Later' if none)
+ if(_manualUrgency && _selectedUrgency == null){
+_showToast('Pick an urgency level in Manual mode', isError: true);
 return;
  }
+
+//resolve the effective urgency based on the mode
+ final effectiveUrgency = _manualUrgency ? (_selectedUrgency ?? 'Later') : _autoUrgency;
 
 //submit handler
  if(_activeTab == 0){
@@ -971,12 +1394,17 @@ return;
   final newTask = {
 'id'  : DateTime.now().millisecondsSinceEpoch.toString(),
 'taskName' : _taskNameController.text.trim(),
+'notes' : _notesController.text.trim(),
 'dueDate' : _taskDueDateController.text.trim(),
 'dueDateTimestamp' : _pickedDate?.millisecondsSinceEpoch,
-'urgency':  _selectedUrgency,
+'urgency':  effectiveUrgency,
+// BUG FIX: store the override mode so the home screen keeps manual choices
+'urgencyManual':  _manualUrgency,
 'category' :  'Personal',
 // BUG FIX: track completion state so tasks can be toggled done
 'isCompleted' : false,
+// BUG FIX: per-task pre-reminder override (null = use Profile default)
+'preReminderMinutes': _overrideMinutes,
   };
 
   _showToast('Task added');
@@ -1018,9 +1446,11 @@ await FirebaseFirestore.instance.collection('broadcast').add({
   'body' : _bodyController.text.trim(),
   'source': _sourceController.text.trim(),
   'dueDate' : _broadcastDueDateController.text.trim(),
+  // BUG FIX: real timestamp so broadcast pushes/carousels know the actual due time
+  'dueDateTimestamp' : _pickedBroadcastDate?.millisecondsSinceEpoch,
   'audience' : _selectedAudience,
   'category' : _selectedCategory,
-  'urgency' : _selectedUrgency,
+  'urgency' : effectiveUrgency,
   'uid' : user.uid,
 
 
@@ -1035,7 +1465,7 @@ _showToast('Task update broadcasted!');
 if(mounted) Navigator.pop(context);
 
 }catch(e){
-  _showToast('Error: $e', isError: true);
+  _showToast('Failed to send broadcast', isError: true);
 
   if(mounted) setState(()=> _isSubmitting = false);
 }
@@ -1044,15 +1474,7 @@ if(mounted) Navigator.pop(context);
 }
 
 void  _showToast(String text, {bool isError = false}){
-
-Fluttertoast.showToast(
-  msg: text, backgroundColor: isError ?
-   const Color(0xFF4a4aaa) : const Color(0xFFe8e8f4),
-
-    toastLength : Toast.LENGTH_LONG
-);
-
-
+  AppToast.show(context, text, isError: isError);
 }
  
 

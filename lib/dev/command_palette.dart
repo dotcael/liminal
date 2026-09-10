@@ -1,11 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'dev_prefs.dart';
 import 'dev_log.dart';
 import 'data_seeder.dart';
 import '../main.dart';
+import '../widgets/app_toast.dart';
 
 class CommandPalette extends StatefulWidget {
   final String realRole;
@@ -160,20 +160,13 @@ class _CommandPaletteState extends State<CommandPalette> {
   }
 
   void _showToast(String msg) {
-    Fluttertoast.showToast(
-      msg: msg,
-      backgroundColor: const Color(0xFF2a2a5a),
-      textColor: const Color(0xFFe8e8f4),
-      toastLength: Toast.LENGTH_LONG,
-    );
+    AppToast.show(context, msg);
   }
 
   void _showResult(String text) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1a1a2e),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         content: SingleChildScrollView(
           child: SelectableText(
             text,
