@@ -34,6 +34,10 @@ REAL_GIT=$(/usr/bin/which git 2>/dev/null)
 WRAPPER_DIR="$HOME/.bun/bin"  # first entry in PATH
 mkdir -p "$WRAPPER_DIR"
 
+# Guarantee the git wrapper is removed even if the build fails or the script
+# is interrupted — a leftover wrapper hijacks `git` system-wide on this machine.
+trap 'rm -f "$WRAPPER_DIR/git"' EXIT
+
 cat > "$WRAPPER_DIR/git" << 'GITWRAP'
 #!/bin/bash
 CACHED_REPO="$HOME/Library/Caches/CocoaPods/Pods/GitHub/firebase-ios-sdk.git"
@@ -81,7 +85,5 @@ echo "Running flutter build ios --$BUILD_MODE ..."
 cd "$(dirname "$0")/.."
 flutter build ios "--$BUILD_MODE"
 
-# 5. Clean up wrapper
-rm -f "$WRAPPER_DIR/git"
-
+# 5. Cleanup happens via the EXIT trap above
 echo "Build complete."
