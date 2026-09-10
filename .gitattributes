@@ -1,0 +1,26 @@
+# Normalize line endings: repo stores LF; working tree uses LF everywhere.
+# Prevents CRLF/LF churn between Windows and macOS (phantom "modified" files).
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets (never touch)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.jar binary
+*.p12 binary
+*.keystore binary
+*.jks binary
