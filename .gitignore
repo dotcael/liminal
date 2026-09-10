@@ -62,3 +62,6 @@ serviceAccountKey.json
 
 # Redundant source snapshot (lib/ is the source of truth)
 lib.zip
+
+# dev heap snapshots
+*.heapsnapshot
