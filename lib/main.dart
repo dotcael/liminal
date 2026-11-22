@@ -74,10 +74,10 @@ class LiminalApp extends StatefulWidget {
 // via context.findAncestorStateOfType<LiminalAppState>()
 class LiminalAppState extends State<LiminalApp> {
   ThemeMode _themeMode = ThemeMode.dark;
-  // BUG FIX: default was 1.3 — text rendered 30% bigger than every other app
-  // on the phone, which read as "off". 1.0 respects the OS text setting;
-  // users can still scale up in Settings.
-  double _textScaleFactor = 1.0;
+  // Text size: the app now respects the iOS system text scaler and applies
+  // its own adjustment on top. Default 1.15 makes the UI slightly larger
+  // without forcing a fixed scale that ignores the phone setting.
+  double _textScaleFactor = 1.15;
 
   bool get isDarkMode => _themeMode == ThemeMode.dark;
   double get textScaleFactor => _textScaleFactor;
@@ -91,7 +91,7 @@ class LiminalAppState extends State<LiminalApp> {
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _textScaleFactor = prefs.getDouble('textScaleFactor') ?? 1.0;
+      _textScaleFactor = prefs.getDouble('textScaleFactor') ?? 1.15;
     });
   }
 
@@ -129,9 +129,11 @@ class LiminalAppState extends State<LiminalApp> {
       debugShowMaterialGrid: DevPrefs.debugPaint,
 
       builder: (context, child) {
+        final systemScale = MediaQuery.textScalerOf(context).scale(1.0);
+        final effectiveScale = systemScale * _textScaleFactor;
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(_textScaleFactor),
+            textScaler: TextScaler.linear(effectiveScale),
           ),
           child: child!,
         );
