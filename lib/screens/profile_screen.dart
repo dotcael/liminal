@@ -74,7 +74,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _handleLogout() async {
-    // BUG FIX (Phase C): stop targeting this device for pushes on logout
     try {
       await FcmService.clearToken();
     } catch (_) {}
@@ -295,7 +294,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-
   Widget _buildRepSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,8 +337,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ],
     );
   }
-
-  // ─────────── DEV OPTIONS ───────────
 
   Widget _buildDevSection() {
     return Column(
@@ -600,7 +596,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _confirmClearTasks() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      // colors + shape come from the app theme's dialogTheme now
       builder: (ctx) => AlertDialog(
         title: const Text('Clear tasks?'),
         content: const Text('This will delete all your local tasks. This cannot be undone.'),

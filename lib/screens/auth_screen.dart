@@ -9,17 +9,13 @@ import '../widgets/haptics.dart';
 import '../widgets/pressable.dart';
 
 class AuthScreen extends StatefulWidget {
-  //this is the constructor for the auth screen
   const AuthScreen({super.key});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-//this is the state for the auth screen
-//declaring email controller variables which use text editing controller to
 class _AuthScreenState extends State<AuthScreen> {
-  //get/trigger the value of email and password from text field
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -27,17 +23,13 @@ class _AuthScreenState extends State<AuthScreen> {
   final _classController = TextEditingController();
   final _deptController = TextEditingController();
 
-  //declaring a variable to store the role of the user which is
-  //by default student
   String _role = 'student';
   bool _isLoginMode = true;
   bool _isLoading = false;
 
-  //declaring a firebase auth instance and a firestore instance to interact with the firebase database
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
 
-  //Constant system wide UI colors. Couldve used ThemeData tho.
   static const _bg = Color(0xFF1a1a2e);
   static const _surface = Color(0xFF22223a);
   static const _border = Color(0xFF2d2d4a);
@@ -48,16 +40,13 @@ class _AuthScreenState extends State<AuthScreen> {
   static const _textSecondary = Color(0xFF6b6b9a);
 
   @override
-  //using the controllers when the widget is disposed to free up resources
   void dispose() {
-    //dispose of the data that the below controllers will hold
-    // Always dispose controllers to free memory when screen is removed
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
     _classController.dispose();
     _deptController.dispose();
-    super.dispose(); // calling the super method to dispose the state of the widget
+    super.dispose();
   }
 
   static final _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
@@ -121,8 +110,6 @@ class _AuthScreenState extends State<AuthScreen> {
         return false;
       }
 
-      // Server-side onUserCreate function will validate and correct the role.
-      // Client can only request 'student' or 'rep' — never 'developer'.
       if (_role != 'student' && _role != 'rep') {
         _role = 'student';
       }
@@ -131,19 +118,14 @@ class _AuthScreenState extends State<AuthScreen> {
     return true;
   }
 
-  // Reusable toast
-  //ensures consistency among popup notis
-
-  // app assumes its false unless called
   void _showToast(String msg, {bool isError = false}) {
     AppToast.show(context, msg, isError: isError);
   }
 
-  // Main Authentication logic for both login and signup
   Future<void> _handleSubmit() async {
-    if (!_validateForm()) return; // If validation fails, exit early
+    if (!_validateForm()) return;
 
-    setState(() => _isLoading = true); // Show loading indicator
+    setState(() => _isLoading = true);
 
     try {
       if (_isLoginMode) {
@@ -157,14 +139,11 @@ class _AuthScreenState extends State<AuthScreen> {
             .doc(credential.user!.uid)
             .get();
 
-
-// get user role from database
         var userRole = doc.data()?['role'] ?? 'student'; 
         final userName = doc.data()?['name'] ?? 'there';
 
         _showToast("Welcome back.");
 
-        // BUG FIX (Phase C): ensure the FCM token is registered for pushes
         FcmService.configureListeners();
         FcmService.ensureToken();
 
@@ -175,7 +154,6 @@ class _AuthScreenState extends State<AuthScreen> {
           );
         }
       }
-      //sign up logic
       else {
         final credential = await _auth.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
@@ -184,11 +162,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
         final email = _emailController.text.trim();
 
-        // Write the user doc with the selected role.
-        // The onUserCreate Cloud Function will validate and correct it
-        // server-side based on the email domain:
         //   @yvl.dev → developer, @ulk.ac.rw → rep, else → student
-        // The client never writes 'developer' directly.
         await _firestore.collection('users').doc(credential.user!.uid).set({
           'name': _nameController.text.trim(),
           'email': email,
@@ -200,7 +174,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
         _showToast("Account created.");
 
-        // BUG FIX (Phase C): register the FCM token for the new account too
         FcmService.configureListeners();
         FcmService.ensureToken();
 
@@ -212,7 +185,6 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       }
     }
-    // Handling specific Firebase authentication errors
      on FirebaseAuthException catch (e) {
       String msg;
 
@@ -266,21 +238,16 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (e) {
       _showToast("Something went wrong. Please try again", isError: true);
     }
-    if (mounted) setState(() => _isLoading = false); // Hide loading indicator
+    if (mounted) setState(() => _isLoading = false);
   }
 
-  // Reusable input field
-  // Keeps all fields visually consistent without repeating styling
   Widget _buildField({
     required String label,
     required TextEditingController controller,
 
-    //password dotting if ticked (true)
     bool obscure = false,
     TextInputType keyboard = TextInputType.text,
 
-    // BUG FIX: iOS autofill — email/password/name fields declare their hints
-    // so Safari/Keychain autofill offers to fill (and later, save) credentials
     List<String>? autofillHints,
   }) {
     return Column(
@@ -305,7 +272,6 @@ class _AuthScreenState extends State<AuthScreen> {
             controller: controller,
             obscureText: obscure,
             keyboardType: keyboard,
-            // BUG FIX: iOS autofill hints (email/password/name)
             autofillHints: autofillHints,
             autocorrect: obscure ? false : true,
             enableSuggestions: !obscure,
@@ -364,7 +330,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 autofillHints: const [AutofillHints.password],
               ),
 
-              //sign up mode
               if (!_isLoginMode) ...[
                 const SizedBox(height: 14),
                 _buildField(
@@ -373,7 +338,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   autofillHints: const [AutofillHints.name],
                 ),
                 const SizedBox(height: 14),
-                // Class is optional for reps — label reflects this
                 _buildField(
                   label: _role == 'rep'
                       ? 'Class / Year (optional for reps)'
@@ -386,7 +350,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 24),
 
-              //role selector — hidden for .yvl.dev emails (auto-assigned developer)
               if (_isDevEmail(_emailController.text.trim()))
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -493,7 +456,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 24),
 
-              //submit button
               //if it is loading and gets tapped do nothing else handle submit
               AppPressable(
                 onTap: _isLoading ? null : _handleSubmit,
@@ -529,7 +491,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
               const SizedBox(height: 16),
 
-              //toggle login or signup
               Center(
                 child: AppPressable(
                   haptic: false,

@@ -20,37 +20,26 @@ import 'services/notification_service.dart';
 import 'services/reminder_prefs.dart';
 import 'services/fcm_service.dart';
 
-// BUG FIX: global key so FCM notification taps can navigate anywhere (feed)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
-  // ensures flutter engine is fully ready before any async work runs
   WidgetsFlutterBinding.ensureInitialized();
 
-  // boots firebase using the auto-generated platform config from flutterfire cli
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Enable App Check to prevent API abuse from non-app clients.
-  // Uses DeviceCheck on iOS/macOS and Play Integrity on Android.
-  // Requires: flutter pub get && enabling App Check in the Firebase Console.
   try {
     await FirebaseAppCheck.instance.activate(
       androidProvider: AndroidProvider.playIntegrity,
       appleProvider: AppleProvider.deviceCheck,
     );
   } catch (e) {
-    // App Check activation can fail if not configured in the Firebase Console.
-    // The app continues to work — Firestore rules still enforce auth.
     debugPrint('App Check activation skipped: $e');
   }
 
-  // NotificationService.init() requests alert/badge/sound permission on iOS the
-  // first time the app launches, so reminders work while the app is closed.
   await NotificationService.init();
   await ReminderPrefs.load();
   NotificationService.requestPermissions();
 
-  // FCM tap routing — pushes about a broadcast open the feed
   FcmService.onNotificationTap = (_) {
     navigatorKey.currentState?.push(
       MaterialPageRoute(builder: (_) => const FeedScreen()),
@@ -60,23 +49,15 @@ void main() async {
   runApp(const LiminalApp());
 }
 
-// BUG FIX: made stateful so the app can switch between dark and light themes
-// without needing Provider or a state management library
 class LiminalApp extends StatefulWidget {
-  // app shell never changes state so stateless 
   const LiminalApp({super.key});
 
   @override
   LiminalAppState createState() => LiminalAppState();
 }
 
-// BUG FIX: public state class so ProfileScreen can call toggleTheme()
-// via context.findAncestorStateOfType<LiminalAppState>()
 class LiminalAppState extends State<LiminalApp> {
   ThemeMode _themeMode = ThemeMode.dark;
-  // Text size: the app now respects the iOS system text scaler and applies
-  // its own adjustment on top. Default 1.15 makes the UI slightly larger
-  // without forcing a fixed scale that ignores the phone setting.
   double _textScaleFactor = 1.15;
 
   bool get isDarkMode => _themeMode == ThemeMode.dark;
@@ -122,7 +103,6 @@ class LiminalAppState extends State<LiminalApp> {
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
 
-      // BUG FIX: now uses the extracted AppTheme + themeMode state
       themeMode: _themeMode,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
@@ -139,19 +119,6 @@ class LiminalAppState extends State<LiminalApp> {
         );
       },
 
-      // BUG FIX: re-enabled splash screen — hardcoded ShellScreen bypassed auth,
-      // which meant FirebaseAuth.currentUser was null and Firestore rules
-      // (require auth) blocked every read/write including the feed stream
-      // named routes registered here — splash decides where to send the user next
-//    routes: {
-//   '/splash': (context) => const SplashScreen(),
-// //'/auth':   (context) => const AuthScreen(),
-//   '/home':   (context) => const HomeScreen(name: 'Test User', role: 'Admin'),
-//  // '/feed': (context) => const FeedScreen(),
-// },
-      // app always opens at splash first
-      // initialRoute: 'splash',
-// BUG FIX: home: const ShellScreen(name: 'Developer', role: 'student'),     
            home: const SplashScreen(),
 
     );

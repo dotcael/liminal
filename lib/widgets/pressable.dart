@@ -2,21 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'haptics.dart';
 
-/// Tappable wrapper that responds like a native control: scales down slightly
-/// and dims while the finger is down, with an optional haptic tick.
-///
-/// Drop-in replacement for bare GestureDetectors so every interactive element
-/// acknowledges the touch. Platform-neutral by design — the press acknowledgment
-/// matters even more with a Quest 2 controller ray than with a fingertip.
 class AppPressable extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
 
-  /// Fire a light haptic when tapped. Disable for controls that fire their
-  /// own haptic signature (sliders, switches).
   final bool haptic;
 
-  /// Scale while pressed. 1.0 disables the scale and keeps only the dim.
   final double pressedScale;
 
   const AppPressable({

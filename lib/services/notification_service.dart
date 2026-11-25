@@ -2,13 +2,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
-/// Schedules and cancels local reminders for personal tasks.
-///
-/// Each task gets up to two one-shot notifications:
-///   - a pre-reminder at `dueDate - preReminderMinutes`
-///   - a "due now" at `dueDate`
-/// IDs are derived deterministically from the task id so cancelling a task
-/// always removes exactly its own reminders.
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -18,11 +11,6 @@ class NotificationService {
   static const _channelName = 'Task reminders';
   static const _channelDescription = 'Reminders for your tasks';
 
-  // iOS: time-sensitive delivery (native UNNotificationInterruptionLevel.
-  // timeSensitive) breaks through Focus/DND with a yellow banner so "due now"
-  // reminders actually get seen. If the capability is absent from the
-  // provisioning profile, iOS degrades to normal delivery — no crash, no
-  // build break. present* flags make alerts/badges/sounds show in foreground.
   static const _details = NotificationDetails(
     android: AndroidNotificationDetails(
       _channelId,
@@ -40,9 +28,6 @@ class NotificationService {
     ),
   );
 
-  // Absolute-instant conversion is timezone-safe even though we only ever
-  // call tz.local — the wall clock of the location is irrelevant because we
-  // build the TZDateTime from the epoch milliseconds.
   static tz.TZDateTime _tzFrom(DateTime dt) =>
       tz.TZDateTime.fromMillisecondsSinceEpoch(tz.local, dt.millisecondsSinceEpoch);
 
@@ -69,10 +54,6 @@ class NotificationService {
     _initialized = true;
   }
 
-  /// Requests alert/badge/sound permission (iOS) and the
-  /// POST_NOTIFICATIONS runtime permission (Android 13+).
-  ///
-  /// Returns true when notifications are allowed on the current platform.
   static Future<bool> requestPermissions() async {
     final ios =
         _plugin.resolvePlatformSpecificImplementation<
@@ -95,9 +76,6 @@ class NotificationService {
     return true;
   }
 
-  /// Reschedules both reminders for [taskId]. Passing a null or non-positive
-  /// [preReminderMinutes] schedules only the due-time notification.
-  /// Tasks already due are skipped entirely (no stale reminders).
   static Future<void> scheduleTaskReminders({
     required String taskId,
     required String taskName,
@@ -133,13 +111,11 @@ class NotificationService {
     );
   }
 
-  /// Removes every local notification belonging to [taskId].
   static Future<void> cancelTaskReminders(String taskId) async {
     await _plugin.cancel(_idFor(taskId, isPre: true));
     await _plugin.cancel(_idFor(taskId, isPre: false));
   }
 
-  /// Shows a notification immediately — used for foreground Firebase pushes.
   static Future<void> showNow({
     required int id,
     required String title,
@@ -148,6 +124,5 @@ class NotificationService {
     await _plugin.show(id, title, body, _details);
   }
 
-  /// Re-runs the permission prompt (from settings, e.g. after enabling).
   static Future<void> reRequestPermissions() => requestPermissions();
 }

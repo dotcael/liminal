@@ -2,11 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'haptics.dart';
 
-/// Compact pre-reminder timing slider (0–120 min, 5-min steps).
-///
-/// Dragging the thumb picks any minute offset; 0 renders as "Off". Used for
-/// both the default (Settings > Notifications) and per-task override (Add
-/// sheet) so the timing control stays consistent and minimal.
 class ReminderSlider extends StatelessWidget {
   final int minutes;
   final ValueChanged<int> onChanged;
@@ -82,7 +77,6 @@ class ReminderSlider extends StatelessWidget {
               divisions: 24,
               label: _label,
               onChanged: (v) {
-                // one tick per detent — mirrors the native picker wheel feel
                 Haptics.select();
                 onChanged(v.round());
               },

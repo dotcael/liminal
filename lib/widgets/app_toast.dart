@@ -4,11 +4,6 @@ import 'package:flutter/material.dart';
 
 import 'haptics.dart';
 
-/// Floating pill toast — the app's single unified transient message.
-///
-/// Replaces Fluttertoast (an Android-only visual) with a platform-neutral
-/// pill that animates up from the bottom, matches the app's design language
-/// on iOS and Android/Quest, and can't be missed behind the nav bar.
 class AppToast {
   AppToast._();
 
@@ -86,7 +81,6 @@ class _ToastViewState extends State<_ToastView> {
   void initState() {
     super.initState();
     widget.onState(this);
-    // enter on the next frame so the transition actually animates
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _visible = true);
     });
