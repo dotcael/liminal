@@ -156,7 +156,6 @@ class _ShellScreenState extends State<ShellScreen> {
   }
 }
 
-// BUG FIX: helper data class so icon definitions live in one place
 class _NavItem {
   final String label;
   final IconData icon;

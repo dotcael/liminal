@@ -2,7 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';  //local date/time store  and conversion to string
+import 'package:intl/intl.dart';
 
 class FeedScreen extends StatefulWidget{
 const FeedScreen({super.key})
@@ -12,8 +12,6 @@ State<FeedScreen> createState()=> _FeedScreenState();
 }
 
 class _FeedScreenState extends State <FeedScreen>{
-
-
 
     static const _bg = Color(0xFF1a1a2e);
     static const _surface = Color(0xFF22223a);
@@ -27,9 +25,5 @@ class _FeedScreenState extends State <FeedScreen>{
     static const _colorFinancial = Color (0xFFc49040);
     static const _colorUrgent = Color(0xFFd85a30);
 
-
-
-
 }
 
-//

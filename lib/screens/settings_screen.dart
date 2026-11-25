@@ -6,10 +6,6 @@ import '../widgets/haptics.dart';
 import '../widgets/pressable.dart';
 import '../widgets/reminder_slider.dart';
 
-/// Settings — Appearance, Display and Notifications, pulled out of Profile.
-///
-/// Opened from the gear icon on Home and Profile. Keeps Profile focused on
-/// identity + role while app-wide preferences live here.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -109,9 +105,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                // BUG FIX: was a hand-drawn fake switch (two containers in a
-                // Row) — a real adaptive switch animates on its own and reads
-                // as native on both platforms (CupertinoSwitch on iOS)
                 Switch.adaptive(
                   value: isDark,
                   activeThumbColor: const Color(0xFF8888dd),

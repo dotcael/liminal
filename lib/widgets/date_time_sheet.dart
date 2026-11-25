@@ -4,15 +4,6 @@ import 'package:flutter/material.dart';
 
 import 'haptics.dart';
 
-/// Adaptive due-date (+time) picker — the app's one entry point for picking
-/// a date anywhere.
-///
-/// iOS: a single bottom sheet with a combined Cupertino wheel picker —
-/// one popup instead of two chained full-screen Material dialogs.
-/// Android (incl. Quest 2): the native Material flow — themed M3 date picker,
-/// then themed M3 time picker, both styled by the app theme.
-///
-/// Returns the picked DateTime, or null if cancelled.
 Future<DateTime?> showAdaptiveDateTimePicker(
   BuildContext context, {
   required DateTime initial,
@@ -36,8 +27,6 @@ Future<DateTime?> showAdaptiveDateTimePicker(
     dateOnly: dateOnly,
   );
 }
-
-// ── iOS: combined wheel sheet ─────────────────────────────────────────────────
 
 Future<DateTime?> _showIosSheet(
   BuildContext context, {
@@ -153,8 +142,6 @@ Future<DateTime?> _showIosSheet(
     },
   );
 }
-
-// ── Android / Quest: themed Material flow ─────────────────────────────────────
 
 Future<DateTime?> _pickMaterial(
   BuildContext context, {

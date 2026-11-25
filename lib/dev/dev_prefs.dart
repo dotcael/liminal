@@ -9,8 +9,6 @@ class DevPrefs {
 
   static final ValueNotifier<String?> roleOverrideNotifier = ValueNotifier(null);
 
-  /// Dev tools are only available in debug/profile builds.
-  /// In release builds, all dev features are disabled regardless of stored prefs.
   static bool get isDebugBuild => !kReleaseMode;
 
   static Future<void> load() async {

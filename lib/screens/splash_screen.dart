@@ -8,7 +8,6 @@ import '../dev/dev_prefs.dart';
 import '../dev/dev_log.dart';
 import '../services/fcm_service.dart';
 
-
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -23,8 +22,6 @@ void initState() {
   _checkAuthAndNavigate();
 }
 Future<void> _checkAuthAndNavigate() async {
-  // BUG FIX: conventional splash duration — was a hard 3s, which felt slow.
-  // 1s is just enough for the logo to register without dragging startup.
   await Future.delayed(const Duration(seconds: 1));
 
   await DevPrefs.load();
@@ -33,7 +30,6 @@ Future<void> _checkAuthAndNavigate() async {
   final user = FirebaseAuth.instance.currentUser;
 
   if (!mounted) return;
-
 
   if (user != null) {
     final doc = await FirebaseFirestore.instance
@@ -44,7 +40,6 @@ Future<void> _checkAuthAndNavigate() async {
     final name = doc.data()?['name'] ?? 'there';
     final role = doc.data()?['role'] ?? 'student';
 
-    // BUG FIX (Phase C): wire FCM token + push listeners for the signed-in user
     FcmService.configureListeners();
     FcmService.ensureToken();
 
@@ -70,7 +65,6 @@ Future<void> _checkAuthAndNavigate() async {
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // Ring 1
           Positioned(
             top: MediaQuery.of(context).size.height * 0.15,
             left: 0,
@@ -89,10 +83,6 @@ Future<void> _checkAuthAndNavigate() async {
               ),
             ),
           ),
-          // BUG FIX: removed duplicate oval ring (250x347) that was labelled Ring 2 —
-          // it overlapped the actual circle ring below and was visibly wrong since
-          // BoxShape.circle was used on a non-square container
-          // Ring 2
           Positioned(
             top: MediaQuery.of(context).size.height * 0.20,
             left: 0,
@@ -112,12 +102,10 @@ Future<void> _checkAuthAndNavigate() async {
             ),
           ),
 
-          //  CENTER CONTENT (
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Outer circle
                 Container(
                   width: 180,
                   height: 180,
@@ -156,7 +144,6 @@ Future<void> _checkAuthAndNavigate() async {
                   ),
                 ),
 
-                // App name
                 const SizedBox(height: 32),
 
                 const Text(
@@ -183,10 +170,8 @@ Future<void> _checkAuthAndNavigate() async {
             ),
           ),
 
-          //  Footer moved OUTSIDE the Column into Stack
-          // This allows it to be positioned independently
           Positioned(
-            bottom: 40, //  pins it to bottom of screen
+            bottom: 40,
             left: 0,
             right: 0,
             child: Column(
