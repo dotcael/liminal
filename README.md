@@ -5,6 +5,12 @@ A Flutter app with Firebase-backed authentication, role-based feeds and push not
 This public copy omits Firebase configuration, Cloud Functions and local build state. To run it,
 add your own Firebase project and `lib/firebase_options.dart` with `flutterfire configure`.
 
+## Screenshots
+
+| Home | Feed | New post |
+|---|---|---|
+| <img src="docs/screenshots/01-home.png" width="240" alt="Home screen with greeting, urgency counts and the next reminder"> | <img src="docs/screenshots/02-feed.png" width="240" alt="Role-based feed with category filters and post cards"> | <img src="docs/screenshots/03-new-post.png" width="240" alt="New post sheet with audience, category and urgency controls"> |
+
 ## What is in here
 
 - Authentication with email and password through Firebase Auth
